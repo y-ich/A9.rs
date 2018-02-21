@@ -1,0 +1,10 @@
+[package]
+name = "rust_pyaq"
+version = "0.1.0"
+authors = ["Yuji Ichikawa <ichikawa.yuji@gmail.com>"]
+
+[dependencies]
+getopts = "*"
+rand = "*"
+itertools = "*"
+tensorflow = { version = "*", features = ["tensorflow_unstable"] }
