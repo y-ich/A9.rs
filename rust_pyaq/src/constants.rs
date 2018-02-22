@@ -18,5 +18,5 @@ pub const EBVCNT: usize = EBSIZE * EBSIZE;
 pub const PASS: usize = EBVCNT;
 
 /// 未使用の線形座標です。
-/// TODO - 該当する場所にOption<usize>を使ったほうが関数のシグニチャは読みやすい。
+// TODO - 該当する場所にOption<usize>を使ったほうが関数のシグニチャは読みやすい。
 pub const VNULL: usize = EBVCNT + 1;

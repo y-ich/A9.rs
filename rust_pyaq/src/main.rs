@@ -8,14 +8,14 @@ extern crate rand;
 extern crate itertools;
 extern crate tensorflow;
 
-mod utils;
-mod numpy;
-mod constants;
-mod stone_group;
-mod board;
-mod neural_network;
-mod search;
-mod gtp;
+pub mod utils;
+pub mod numpy;
+pub mod constants;
+pub mod stone_group;
+pub mod board;
+pub mod neural_network;
+pub mod search;
+pub mod gtp;
 
 use constants::*;
 use board::*;

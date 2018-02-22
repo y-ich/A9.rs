@@ -5,7 +5,7 @@ use constants::*;
 use stone_group::StoneGroup;
 
 const KEEP_PREV_CNT: usize = 2;
-pub const FEATURE_CNT: usize = KEEP_PREV_CNT * 2 + 3;  // 7
+const FEATURE_CNT: usize = KEEP_PREV_CNT * 2 + 3;  // 7
 const X_LABELS: [char; 19] = ['A','B','C','D','E','F','G','H','J','K','L','M','N','O','P','Q','R','S','T'];
 
 
@@ -87,7 +87,7 @@ pub enum Error {
 }
 
 
-// 石の色や手番を表す列挙型です。
+/// 石の色や手番を表す列挙型です。
 #[derive(Clone, Copy, PartialEq, Hash)]
 pub enum Color {
     White = 0,
