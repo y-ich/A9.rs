@@ -16,6 +16,7 @@ fn test_fill() {
 }
 
 /// 配列の中で最も出現頻度の高い要素を返します。
+/// 空の配列を渡すとpanicします。
 pub fn most_common<T: Hash + Eq>(array: &[T]) -> &T {
     let mut map = HashMap::new();
     for e in array {

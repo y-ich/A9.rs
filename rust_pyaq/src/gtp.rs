@@ -110,7 +110,7 @@ pub fn call_gtp(main_time: f32, byoyomi: f32, quick: bool, clean: bool, use_gpu:
             },
             "genmove" => {
                 let (mov, win_rate) = if quick {
-                    (rv2ev(np::argmax(&tree.evaluate(&b).unwrap().0).unwrap()), 0.5)
+                    (rv2ev(np::argmax(&tree.evaluate(&b).unwrap().0)), 0.5)
                 } else {
                     tree.search(&b, 0.0, false, clean)
                 };

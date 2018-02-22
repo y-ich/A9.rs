@@ -196,7 +196,7 @@ impl Tree {
             let action_value: Vec<f32> = multizip((rate.iter(), nd.prob.iter(), nd.visit_cnt.iter()))
                 .map(|(&r, &p, &c)| r + cpsv * p / (c + 1) as f32)
                 .collect();
-            best = np::argmax(&action_value[0..nd.branch_cnt]).unwrap();
+            best = np::argmax(&action_value[0..nd.branch_cnt]);
 
             route.push((node_id, best));
             next_id = nd.next_id[best];
@@ -349,7 +349,7 @@ impl Tree {
                 break;
             }
 
-            let best = np::argmax(&nd.visit_cnt[0..nd.branch_cnt]).unwrap();
+            let best = np::argmax(&nd.visit_cnt[0..nd.branch_cnt]);
             if nd.visit_cnt[best] == 0 {
                 break;
             }
