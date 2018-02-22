@@ -10,7 +10,7 @@ use utils::fill;
 use numpy as np;
 use constants::*;
 use board::*;
-use model::DualNetwork;
+use neural_network::NeuralNetwork;
 
 const MAX_NODE_CNT: usize = 16384; // 2 ^ 14
 const EXPAND_CNT: usize = 8;
@@ -81,13 +81,11 @@ pub struct Tree {
     root_move_cnt: usize,
     node_hashs: HashMap<u64, usize>,
     eval_cnt: usize,
-    graph: tf::Graph,
-    sess: tf::Session,
+    nn: NeuralNetwork,
 }
 
 impl Tree {
-    pub fn new(ckpt_path: &str, use_gpu: bool) -> Self {
-        let (graph, sess) = Self::get_sess(ckpt_path, use_gpu);
+    pub fn new(ckpt_path: &str) -> Self {
         Self {
             main_time: 0.0,
             byoyomi: 1.0,
@@ -98,8 +96,7 @@ impl Tree {
             root_move_cnt: 0,
             node_hashs: HashMap::new(),
             eval_cnt: 0,
-            graph: graph,
-            sess: sess,
+            nn: NeuralNetwork::new(ckpt_path),
         }
     }
 
@@ -126,22 +123,10 @@ impl Tree {
         unsafe { TREE_STOP = false; }
     }
 
-    fn get_sess(ckpt_path: &str, use_gpu: bool) -> (tf::Graph, tf::Session) {
-        let _device_name = if use_gpu { "gpu" } else { "cpu" };
-        let mut dn = DualNetwork::new();
-        dn.create_sess(ckpt_path).unwrap()
-    }
-
     /// ニューラルネットワークを評価します。
     // TODO - 責務としてはBoardなのだけど、ワーカーがグラフとセッションを管理するのでTreeが計算している。これでいいのかどうか。
     pub fn evaluate(&mut self, b: &Board) -> Result<(tf::Tensor<f32>, tf::Tensor<f32>), Box<Error>>{
-        let feature = b.feature();
-        let mut step = tf::StepWithGraph::new();
-        step.add_input(&self.graph.operation_by_name_required("x")?, 0, &feature);
-        let policy = step.request_output(&self.graph.operation_by_name_required("pfc/policy")?, 0);
-        let value = step.request_output(&self.graph.operation_by_name_required("vfc/value")?, 0);
-        self.sess.run(&mut step)?;
-        Ok((step.take_output(policy)?, step.take_output(value)?))
+        self.nn.evaluate(&b.feature())
     }
 
     /// 不要なノード(現局面より手数が少ないノード)を削除します。

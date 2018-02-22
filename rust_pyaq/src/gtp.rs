@@ -46,9 +46,9 @@ fn parse(line: &str) -> (Option<&str>, Vec<&str>) {
 
 
 /// GTPコマンドを待ち受け、実行するループです。
-pub fn call_gtp(main_time: f32, byoyomi: f32, quick: bool, clean: bool, use_gpu: bool) {
+pub fn call_gtp(main_time: f32, byoyomi: f32, quick: bool, clean: bool) {
     let mut b = Board::new();
-    let mut tree = Tree::new("frozen_model.pb", use_gpu);
+    let mut tree = Tree::new("frozen_model.pb");
     tree.set_time(main_time, byoyomi);
 
     let stdin = io::stdin();
