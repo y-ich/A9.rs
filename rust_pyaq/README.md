@@ -13,13 +13,17 @@ macOSでHomeBrewを利用されているかたはHomeBrewでインストール�
 brew install libtensorflow
 ```
 
-本体はnightlyでコンパイルする必要があります。
+本体はnightlyでコンパイルする必要があります。(box syntax使用のため)
 ```
 cargo +nightly build --release
 ```
 
-## 性能
-CPU版で4.5倍ぐらいな雰囲気でした。(iMac Late 2012, 2.9GHz Core i5。初手)
+## 遊び方
+rust_pyaqの下にfrozen_model.pbを用意してください。
+```
+cargo +nightly run --release -- -h
+```
+でオプションの説明が出ます。
 
 ## ライセンス
 MIT

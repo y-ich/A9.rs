@@ -1,4 +1,8 @@
 #![feature(box_syntax)]
+/// rust_pyaq: Pyaq(https://github.com/ymgaq/Pyaq)のRustへの移植コード
+/// 作者: 市川雄二
+/// ライセンス: MIT
+
 extern crate getopts;
 extern crate rand;
 extern crate itertools;
@@ -30,10 +34,52 @@ fn make_opts() -> getopts::Options {
         .optflag("", "quick", "No MCTS.")
         .optflag("", "random", "Random play.")
         .optflag("", "cpu", "CPU only, no GPUs.")
-        .optflag("", "clean", "clean.")
-        .optopt("", "main_time", "Main time", "NUM")
-        .optopt("", "byoyomi", "Byoyomi", "NUM");
+        .optflag("", "clean", "Try to pickup all dead stones.")
+        .optopt("", "main_time", "Main time(sec) defaut: 0", "NUM")
+        .optopt("", "byoyomi", "Byoyomi(sec) default: 3 (1 for self play)", "NUM");
     opts
+}
+
+fn random_self_play(max_move_cnt: usize) -> Board {
+    let mut b = Board::new();
+    while b.move_cnt < max_move_cnt {
+        let prev_move = b.prev_move;
+        let mov = b.random_play();
+        let _ = b.play(mov, false);
+        b.showboard();
+        if prev_move == PASS && mov == PASS {
+            break;
+        }
+    }
+    b
+}
+
+fn self_play(max_move_cnt: usize, time: f32, clean: bool, use_gpu: bool) -> Board {
+    let mut b = Board::new();
+    let mut tree = search::Tree::new("frozen_model.pb", use_gpu);
+    while b.move_cnt < max_move_cnt {
+        let prev_move = b.prev_move;
+        let (mov, _) = tree.search(&b, time, false, clean);
+        let _ = b.play(mov, false);
+        b.showboard();
+        if prev_move == PASS && mov == PASS {
+            break;
+        }
+    }
+    b
+}
+
+fn final_score(b: &Board) -> f32 {
+    const ROLL_OUT_NUM: usize = 256;
+    let mut score_list = Vec::new();
+    let mut b_cpy = Board::new();
+
+    for _ in 0..ROLL_OUT_NUM {
+        b.copy_to(&mut b_cpy);
+        b_cpy.rollout(false);
+        score_list.push(b_cpy.score());
+    }
+    utils::most_common(&score_list)
 }
 
 fn main() {
@@ -64,40 +110,13 @@ fn main() {
             gtp::call_gtp(main_time, byoyomi, quick, clean, use_gpu);
         },
         LaunchMode::SelfPlay => {
-            let mut b = Board::new();
-            if random {
-                while b.move_cnt < BVCNT * 2 {
-                    let prev_move = b.prev_move;
-                    let mov = b.random_play();
-                    let _ = b.play(mov, false);
-                    b.showboard();
-                    if prev_move == PASS && mov == PASS {
-                        break;
-                    }
-                }
+            let end_position = if random {
+                random_self_play(BVCNT * 2)
             } else {
-                let mut tree = search::Tree::new("frozen_model.pb", use_gpu);
-                while b.move_cnt < BVCNT * 2 {
-                    let prev_move = b.prev_move;
-                    let (mov, _) = tree.search(&b, 0.0, false, clean);
-                    let _ = b.play(mov, false);
-                    b.showboard();
-                    if prev_move == PASS && mov == PASS {
-                        break;
-                    }
-                }
-            }
+                self_play(BVCNT * 2, 0.0, clean, use_gpu)
+            };
 
-            let mut score_list = Vec::new();
-            let mut b_cpy = Board::new();
-
-            for _ in 0..256 {
-                b.copy_to(&mut b_cpy);
-                b_cpy.rollout(false);
-                score_list.push(b_cpy.score());
-            }
-
-            let score = utils::most_common(&score_list);
+            let score = final_score(&end_position);
             let result_str = if score == 0.0 {
                 "Draw".to_string()
             } else {
