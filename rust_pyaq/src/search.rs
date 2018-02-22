@@ -8,6 +8,7 @@ use itertools::multizip;
 use tensorflow as tf;
 use utils::fill;
 use numpy as np;
+use constants::*;
 use board::*;
 use model::DualNetwork;
 
@@ -18,6 +19,7 @@ fn duration2float(d: time::Duration) -> f32 {
     d.as_secs() as f32 + d.subsec_nanos() as f32 / 1000_000_000.0
 }
 
+/// MCTSの各ノードです。
 #[derive(Clone, Copy)] // 配列の初期化で楽するためにCopyにした
 struct Node {
     // 各配列のBVCNT番目の要素はPASSに対応する着手
@@ -33,7 +35,7 @@ struct Node {
     total_value: f32,
     total_cnt: usize,
     hash: u64,
-    move_cnt: usize,
+    move_cnt: usize, // TODO - Option<usize>のほうがいいか
 }
 
 impl Node {
@@ -68,10 +70,11 @@ impl Node {
 static mut TREE_STOP: bool = false;
 static mut TREE_CP: f32 = 2.0;
 
+/// MCTSを実行するワーカー構造体です。
 pub struct Tree {
-    pub main_time: f32,
-    pub byoyomi: f32,
-    pub left_time: f32,
+    main_time: f32,
+    byoyomi: f32,
+    left_time: f32,
     node: Box<[Node; MAX_NODE_CNT]>,
     node_cnt: usize,
     root_id: usize,
@@ -100,6 +103,16 @@ impl Tree {
         }
     }
 
+    pub fn set_time(&mut self, main_time: f32, byoyomi: f32) {
+        self.main_time = main_time;
+        self.left_time = main_time;
+        self.byoyomi = byoyomi;
+    }
+
+    pub fn set_left_time(&mut self, left_time: f32) {
+        self.left_time = left_time;
+    }
+
     pub fn clear(&mut self) {
         self.left_time = self.main_time;
         for nd in self.node.iter_mut() {
@@ -113,12 +126,14 @@ impl Tree {
         unsafe { TREE_STOP = false; }
     }
 
-    pub fn get_sess(ckpt_path: &str, use_gpu: bool) -> (tf::Graph, tf::Session) {
+    fn get_sess(ckpt_path: &str, use_gpu: bool) -> (tf::Graph, tf::Session) {
         let _device_name = if use_gpu { "gpu" } else { "cpu" };
         let mut dn = DualNetwork::new();
         dn.create_sess(ckpt_path).unwrap()
     }
 
+    /// ニューラルネットワークを評価します。
+    // TODO - 責務としてはBoardなのだけど、ワーカーがグラフとセッションを管理するのでTreeが計算している。これでいいのかどうか。
     pub fn evaluate(&mut self, b: &Board) -> Result<(tf::Tensor<f32>, tf::Tensor<f32>), Box<Error>>{
         let feature = b.feature();
         let mut step = tf::StepWithGraph::new();
@@ -129,22 +144,21 @@ impl Tree {
         Ok((step.take_output(policy)?, step.take_output(value)?))
     }
 
-    pub fn delete_node(&mut self) {
+    /// 不要なノード(現局面より手数が少ないノード)を削除します。
+    fn delete_node(&mut self) {
         if self.node_cnt < MAX_NODE_CNT / 2 {
             return;
         }
         for i in 0..MAX_NODE_CNT {
             let mc = self.node[i].move_cnt;
             if mc < usize::MAX && mc < self.root_move_cnt {
-                if self.node_hashs.contains_key(&self.node[i].hash)  {
-                    self.node_hashs.remove(&self.node[i].hash);
-                }
+                self.node_hashs.remove(&self.node[i].hash);
                 self.node[i].clear()
             }
         }
     }
 
-    pub fn create_node(&mut self, b_info: (u64, usize, Vec<usize>), prob: &[f32]) -> usize {
+    fn create_node(&mut self, b_info: (u64, usize, Vec<usize>), prob: &[f32]) -> usize {
         let hs = b_info.0;
 
         if self.node_hashs.contains_key(&hs) &&
@@ -181,13 +195,13 @@ impl Tree {
         return node_id;
     }
 
-    pub fn search_branch(&mut self, b: &mut Board, node_id: usize, route: &mut Vec<(usize, usize)>) -> f32 {
+    fn search_branch(&mut self, b: &mut Board, node_id: usize, route: &mut Vec<(usize, usize)>) -> f32 {
         let best;
         let next_id;
         let next_move;
-        let head_node;
-        { // ndを解放するためのブロック
-            let nd = self.node.get(node_id).unwrap();
+        let is_head_node;
+        { // 上記変数を計算し、下記ndを解放するためのブロック
+            let nd = self.node.get(node_id).unwrap(); // Copyを避けるためにget
             let nd_rate = if nd.total_cnt == 0 { 0.0 } else { nd.total_value / nd.total_cnt as f32 };
             let cpsv = unsafe { TREE_CP } * (nd.total_cnt as f32).sqrt();
             let rate: Vec<f32> = nd.value_win.iter().zip(nd.visit_cnt.iter())
@@ -201,16 +215,16 @@ impl Tree {
             route.push((node_id, best));
             next_id = nd.next_id[best];
             next_move = nd.mov[best];
-            head_node = !self.has_next(node_id, best, b.move_cnt + 1) ||
+            is_head_node = !self.has_next(node_id, best, b.get_move_cnt() + 1) ||
                 nd.visit_cnt[best] < EXPAND_CNT ||
-                (b.move_cnt > BVCNT * 2) ||
-                (next_move == PASS && b.prev_move == PASS);
+                (b.get_move_cnt() > BVCNT * 2) ||
+                (next_move == PASS && b.get_prev_move() == PASS);
         }
 
         let _ = b.play(next_move, false);
 
         let value;
-        if head_node {
+        if is_head_node {
             if self.node[node_id].evaluated[best] {
                 value = self.node[node_id].value[best];
             } else {
@@ -241,19 +255,21 @@ impl Tree {
         nd.total_cnt += 1;
         nd.value_win[best] += value;
         nd.visit_cnt[best] += 1;
+
         return value;
     }
 
+    /// time_で決定される時間の間、MCTSを実行し、最も勝率の高い着手と勝率を返します。
     pub fn search(&mut self, b: &Board, time_: f32, ponder: bool, clean: bool) -> (usize, f32) {
         let mut time_ = time_;
         let start = time::SystemTime::now();
         let (prob, _) = self.evaluate(b).unwrap();
         self.root_id = self.create_node(b.info(), &prob);
-        self.root_move_cnt = b.move_cnt;
-        unsafe { TREE_CP = if b.move_cnt < 8 { 0.01 } else { 1.5 }; }
+        self.root_move_cnt = b.get_move_cnt();
+        unsafe { TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 }; }
 
         if self.node[self.root_id].branch_cnt <= 1 {
-            eprintln!("\nmove count={}:", b.move_cnt + 1);
+            eprintln!("\nmove count={}:", b.get_move_cnt() + 1);
             self.print_info(self.root_id);
             return (PASS, 0.5);
         }
@@ -266,23 +282,17 @@ impl Tree {
 
         let mut win_rate = self.branch_rate(&self.node[self.root_id], best);
 
-//         if not ponder and self.byoyomi == 0 and self.left_time < 10:
-//         if nd.visit_cnt[best] < 1000:
-//                 return rv2ev(np.argmax(prob)), 0.5
-//             else:
-//                 stderr.write("\nmove count=%d:\n" % (b.move_cnt + 1))
-//                 self.print_info(self.root_id)
-//                 return nd.move[best], win_rate
-
-        let stand_out = self.node[self.root_id].total_cnt > 5000 && self.node[self.root_id].visit_cnt[best] > self.node[self.root_id].visit_cnt[second] * 100;
-        let almost_win = self.node[self.root_id].total_cnt > 5000 && (win_rate < 0.1 || win_rate > 0.9);
+        let stand_out = self.node[self.root_id].total_cnt > 5000 &&
+            self.node[self.root_id].visit_cnt[best] > self.node[self.root_id].visit_cnt[second] * 100;
+        let almost_win = self.node[self.root_id].total_cnt > 5000 &&
+            (win_rate < 0.1 || win_rate > 0.9);
 
         if ponder || !(stand_out || almost_win) {
             if time_ == 0.0 {
                 if self.main_time == 0.0 || self.left_time < self.byoyomi * 2.0 {
                     time_ = self.byoyomi.max(1.0);
                 } else {
-                    time_ = self.left_time / (55.0 + max(50 - b.move_cnt, 0) as f32);
+                    time_ = self.left_time / (55.0 + max(50 - b.get_move_cnt(), 0) as f32);
                 }
             }
             // search
@@ -318,7 +328,7 @@ impl Tree {
         }
         if !ponder {
             eprintln!("\nmove count={}: left time={:.1}[sec] evaluated={}",
-                b.move_cnt + 1, (self.left_time - time_).max(0.0), self.eval_cnt);
+                b.get_move_cnt() + 1, (self.left_time - time_).max(0.0), self.eval_cnt);
             self.print_info(self.root_id);
             self.left_time = (self.left_time - duration2float(start.elapsed().unwrap())).max(0.0);
         }

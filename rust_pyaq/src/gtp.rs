@@ -1,6 +1,7 @@
 use std::vec::Vec;
 use std::io::{self, BufRead};
 use numpy as np;
+use constants::*;
 use board::*;
 use search::Tree;
 
@@ -44,11 +45,11 @@ fn parse(line: &str) -> (Option<&str>, Vec<&str>) {
 }
 
 
+/// GTPコマンドを待ち受け、実行するループです。
 pub fn call_gtp(main_time: f32, byoyomi: f32, quick: bool, clean: bool, use_gpu: bool) {
     let mut b = Board::new();
     let mut tree = Tree::new("frozen_model.pb", use_gpu);
-    tree.main_time = main_time;
-    tree.byoyomi = byoyomi;
+    tree.set_time(main_time, byoyomi);
 
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
@@ -94,13 +95,11 @@ pub fn call_gtp(main_time: f32, byoyomi: f32, quick: bool, clean: bool, use_gpu:
                 }
             },
             "time_settings" => {
-                tree.main_time = args[0].parse().unwrap();
-                tree.left_time = tree.main_time;
-                tree.byoyomi = args[1].parse().unwrap();
+                tree.set_time(args[0].parse().unwrap(), args[1].parse().unwrap());
                 send("");
             },
             "time_left" => {
-                tree.left_time = args[1].parse().unwrap();
+                tree.set_left_time(args[1].parse().unwrap());
                 send("");
             },
             "clear_board" => {
@@ -126,7 +125,7 @@ pub fn call_gtp(main_time: f32, byoyomi: f32, quick: bool, clean: bool, use_gpu:
                 send("");
             },
             "undo" => {
-                let mut history = b.history.clone();
+                let mut history = b.get_history().clone();
                 history.pop();
                 b.clear();
                 tree.clear();

@@ -10,11 +10,14 @@ extern crate tensorflow;
 
 mod utils;
 mod numpy;
-mod gtp;
+mod constants;
+mod stone_group;
 mod board;
 mod model;
 mod search;
+mod gtp;
 
+use constants::*;
 use board::*;
 
 enum LaunchMode {
@@ -42,8 +45,8 @@ fn make_opts() -> getopts::Options {
 
 fn random_self_play(max_move_cnt: usize) -> Board {
     let mut b = Board::new();
-    while b.move_cnt < max_move_cnt {
-        let prev_move = b.prev_move;
+    while b.get_move_cnt() < max_move_cnt {
+        let prev_move = b.get_prev_move();
         let mov = b.random_play();
         let _ = b.play(mov, false);
         b.showboard();
@@ -57,8 +60,8 @@ fn random_self_play(max_move_cnt: usize) -> Board {
 fn self_play(max_move_cnt: usize, time: f32, clean: bool, use_gpu: bool) -> Board {
     let mut b = Board::new();
     let mut tree = search::Tree::new("frozen_model.pb", use_gpu);
-    while b.move_cnt < max_move_cnt {
-        let prev_move = b.prev_move;
+    while b.get_move_cnt() < max_move_cnt {
+        let prev_move = b.get_prev_move();
         let (mov, _) = tree.search(&b, time, false, clean);
         let _ = b.play(mov, false);
         b.showboard();
