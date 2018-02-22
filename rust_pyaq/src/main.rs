@@ -71,15 +71,15 @@ fn self_play(max_move_cnt: usize, time: f32, clean: bool, use_gpu: bool) -> Boar
 
 fn final_score(b: &Board) -> f32 {
     const ROLL_OUT_NUM: usize = 256;
-    let mut score_list = Vec::new();
+    let mut double_score_list = Vec::new();
     let mut b_cpy = Board::new();
 
     for _ in 0..ROLL_OUT_NUM {
         b.copy_to(&mut b_cpy);
         b_cpy.rollout(false);
-        score_list.push(b_cpy.score());
+        double_score_list.push((b_cpy.score() * 2.0) as i32);
     }
-    utils::most_common(&score_list)
+    *utils::most_common(&double_score_list) as f32 / 2.0
 }
 
 fn main() {

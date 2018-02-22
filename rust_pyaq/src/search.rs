@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::time;
 use itertools::multizip;
 use tensorflow as tf;
+use utils::fill;
 use numpy as np;
 use board::*;
 use model::DualNetwork;
@@ -17,8 +18,9 @@ fn duration2float(d: time::Duration) -> f32 {
     d.as_secs() as f32 + d.subsec_nanos() as f32 / 1000_000_000.0
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy)] // 配列の初期化で楽するためにCopyにした
 struct Node {
+    // 各配列のBVCNT番目の要素はPASSに対応する着手
     mov: [usize; BVCNT + 1],
     prob: [f32; BVCNT + 1],
     value: [f32; BVCNT + 1],
@@ -43,30 +45,14 @@ impl Node {
     }
 
     pub fn init_branch(&mut self) {
-        for e in self.mov.iter_mut() {
-            *e = VNULL;
-        }
-        for e in self.prob.iter_mut() {
-            *e = 0.0;
-        }
-        for e in self.value.iter_mut() {
-            *e = 0.0;
-        }
-        for e in self.value_win.iter_mut() {
-            *e = 0.0;
-        }
-        for e in self.visit_cnt.iter_mut() {
-            *e = 0;
-        }
-        for e in self.next_id.iter_mut() {
-            *e = usize::MAX;
-        }
-        for e in self.next_hash.iter_mut() {
-            *e = 0;
-        }
-        for e in self.evaluated.iter_mut() {
-            *e = false;
-        }
+        fill(&mut self.mov, VNULL);
+        fill(&mut self.prob, 0.0);
+        fill(&mut self.value, 0.0);
+        fill(&mut self.value_win, 0.0);
+        fill(&mut self.visit_cnt, 0);
+        fill(&mut self.next_id, usize::MAX);
+        fill(&mut self.next_hash, 0);
+        fill(&mut self.evaluated, false);
     }
 
     pub fn clear(&mut self) {
