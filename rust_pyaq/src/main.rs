@@ -4,21 +4,12 @@
 /// ライセンス: MIT
 
 extern crate getopts;
-extern crate rand;
-extern crate itertools;
-extern crate tensorflow;
+extern crate rust_pyaq_lib;
 
-pub mod utils;
-pub mod numpy;
-pub mod constants;
-pub mod stone_group;
-pub mod board;
-pub mod neural_network;
-pub mod search;
-pub mod gtp;
-
-use constants::*;
-use board::*;
+use rust_pyaq_lib as rpl;
+use rpl::*;
+use rpl::constants::*;
+use rpl::board::*;
 
 enum LaunchMode {
     Gtp,

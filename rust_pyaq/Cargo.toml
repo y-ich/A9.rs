@@ -8,3 +8,11 @@ getopts = "*"
 rand = "*"
 itertools = "*"
 tensorflow = { version = "*", features = ["tensorflow_unstable"] }
+
+[lib]
+name = "rust_pyaq_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rust_pyaq"
+path = "src/main.rs"
