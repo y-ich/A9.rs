@@ -8,11 +8,11 @@ getopts = "*"
 rand = "*"
 itertools = "*"
 
-[target.'cfg(unix)'.dependencies]
+[target.'cfg(not(feature = "wasm"))'.dependencies]
 tensorflow = { version = "*", features = ["tensorflow_unstable"] }
 
-[target.'cfg(windows)'.dependencies]
-tensorflow = { version = "*", features = ["tensorflow_unstable"] }
+[target.'cfg(feature = "wasm")'.dependencies]
+stdweb = "*"
 
 [features]
 wasm = []

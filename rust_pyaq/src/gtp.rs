@@ -45,6 +45,7 @@ fn parse(line: &str) -> (Option<&str>, Vec<&str>) {
 }
 
 
+#[js_export]
 pub fn gtp(b: &mut Board, tree: &mut Tree, line: String, quick: bool, clean: bool) -> bool {
     let line = line.trim_right();
     if line.is_empty() {
