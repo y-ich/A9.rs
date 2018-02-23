@@ -493,14 +493,26 @@ impl Board {
     }
 
     /// ニューラルネットワークへの入力を返します。
+    #[cfg(target_arch = "wasm32")]
+    pub fn feature(&self) -> [f32; BVCNT * FEATURE_CNT] {
+        let mut feature = [0.0; BVCNT * FEATURE_CNT];
+        self._feature(&mut feature);
+        feature
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn feature(&self) -> tf::Tensor<f32> {
+        let mut feature = tf::Tensor::new(&[BVCNT as u64, FEATURE_CNT as u64]);
+        self._feature(&mut feature);
+        feature
+    }
+
+    fn _feature(&self, feature_: &mut [f32]) {
         #[inline]
         fn index(p: usize, f: usize) -> usize {
             p * FEATURE_CNT + f
         }
 
-        let mut feature_ = tf::Tensor::new(&[BVCNT as u64, FEATURE_CNT as u64]);
         let my = Intersection::Stone(self.turn);
         let opp = Intersection::Stone(self.turn.opponent());
         for p in 0..BVCNT {
@@ -524,8 +536,6 @@ impl Board {
         for p in 0..BVCNT {
             *feature_.get_mut(index(p, FEATURE_CNT - 1)).unwrap() = my.to_usize() as f32;
         }
-
-        feature_
     }
 
     /// 局面のハッシュを返します。

@@ -1,7 +1,6 @@
 use std::usize;
 use std::cmp::{min, max};
 use std::mem;
-use std::error::Error;
 use std::collections::HashMap;
 use std::time;
 use itertools::multizip;
@@ -11,13 +10,12 @@ use utils::fill;
 use numpy as np;
 use constants::*;
 use board::*;
-#[cfg(target_arch = "wasm32")]
-use stdweb::{web, webcore::value};
 #[cfg(not(target_arch = "wasm32"))]
 use neural_network::NeuralNetwork;
 
 const MAX_NODE_CNT: usize = 16384; // 2 ^ 14
 const EXPAND_CNT: usize = 8;
+
 
 fn duration2float(d: time::Duration) -> f32 {
     d.as_secs() as f32 + d.subsec_nanos() as f32 / 1000_000_000.0
@@ -90,7 +88,7 @@ pub struct Tree {
 }
 
 impl Tree {
-    pub fn new(ckpt_path: &str) -> Self {
+    pub fn new(_ckpt_path: &str) -> Self {
         Self {
             main_time: 0.0,
             byoyomi: 1.0,
@@ -102,7 +100,7 @@ impl Tree {
             node_hashs: HashMap::new(),
             eval_cnt: 0,
             #[cfg(not(target_arch = "wasm32"))]
-            nn: NeuralNetwork::new(ckpt_path),
+            nn: NeuralNetwork::new(_ckpt_path),
         }
     }
 
@@ -131,19 +129,21 @@ impl Tree {
 
     /// ニューラルネットワークを評価します。
     #[cfg(target_arch = "wasm32")]
-    pub fn evaluate(&mut self, b: &Board) -> Result<(web::TypedArray<f32>, web::TypedArray<f32>), Box<Error>>{
-        let feature = b.feature();
-        let result = js! { evaluate(@{feature}) };
-        if result == value::Null {
-            Box::new(Error::new())
-        } else {
-            Ok(result)
-        }
+    pub fn evaluate(&mut self, b: &Board) -> (Vec<f32>, Vec<f32>) {
+        use stdweb::{UnsafeTypedArray, Reference};
+        use stdweb::web::TypedArray;
+        use stdweb::unstable::TryInto;
+        let feature = &b.feature();
+        let feature = unsafe { UnsafeTypedArray::new(feature) };
+        let mut array: Vec<Reference> = js! { evaluate(@{feature}) }.try_into().unwrap();
+        let first = array.remove(0);
+        let second = array.remove(0);
+        (first.downcast::<TypedArray<f32>>().unwrap().to_vec(), second.downcast::<TypedArray<f32>>().unwrap().to_vec())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn evaluate(&mut self, b: &Board) -> Result<(tf::Tensor<f32>, tf::Tensor<f32>), Box<Error>>{
-        self.nn.evaluate(&b.feature())
+    pub fn evaluate(&mut self, b: &Board) -> (tf::Tensor<f32>, tf::Tensor<f32>) {
+        self.nn.evaluate(&b.feature()).unwrap()
     }
 
     /// 不要なノード(現局面より手数が少ないノード)を削除します。
@@ -230,7 +230,7 @@ impl Tree {
             if self.node[node_id].evaluated[best] {
                 value = self.node[node_id].value[best];
             } else {
-                let (prob_, value_) = self.evaluate(b).unwrap();
+                let (prob_, value_) = self.evaluate(b);
                 self.eval_cnt += 1;
                 value = -value_[0];
                 self.node[node_id].value[best] = value;
@@ -265,7 +265,7 @@ impl Tree {
     pub fn search(&mut self, b: &Board, time_: f32, ponder: bool, clean: bool) -> (usize, f32) {
         let mut time_ = time_;
         let start = time::SystemTime::now();
-        let (prob, _) = self.evaluate(b).unwrap();
+        let (prob, _) = self.evaluate(b);
         self.root_id = self.create_node(b.info(), &prob);
         self.root_move_cnt = b.get_move_cnt();
         unsafe { TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 }; }
