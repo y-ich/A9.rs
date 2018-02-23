@@ -17,6 +17,3 @@ pub mod board;
 pub mod neural_network;
 pub mod search;
 pub mod gtp;
-
-// wasm化のためにexport
-pub use::gtp::gtp;

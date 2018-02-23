@@ -101,7 +101,7 @@ fn main() {
 
     match launch_mode {
         LaunchMode::Gtp => {
-            gtp::call_gtp(main_time, byoyomi, quick, clean);
+            gtp::GtpClient::new(main_time, byoyomi, quick, clean).call_gtp();
         },
         LaunchMode::SelfPlay => {
             let end_position = if random {

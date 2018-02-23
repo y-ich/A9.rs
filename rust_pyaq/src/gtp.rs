@@ -45,125 +45,139 @@ fn parse(line: &str) -> (Option<&str>, Vec<&str>) {
 }
 
 
-#[js_export]
-pub fn gtp(b: &mut Board, tree: &mut Tree, line: String, quick: bool, clean: bool) -> bool {
-    let line = line.trim_right();
-    if line.is_empty() {
-        return true;
+/// GTPコマンドを待ち受け、実行するワーカーです。
+pub struct GtpClient {
+    b: Board,
+    tree: Tree,
+    quick: bool,
+    clean: bool,
+}
+
+impl GtpClient {
+    pub fn new(main_time: f32, byoyomi: f32, quick: bool, clean: bool) -> Self {
+        let mut tree = Tree::new("frozen_model.pb");
+        tree.set_time(main_time, byoyomi);
+        GtpClient {
+            b: Board::new(),
+            tree: tree,
+            quick: quick,
+            clean: clean,
+        }
     }
-    let (command, args) = parse(line);
-    match command.unwrap() {
-        "protocol_version" => { send("2"); },
-        "name" => { send("AlphaGo9"); },
-        "version" => { send("1.0"); },
-        "list_commands" => {
-            print!("=");
-            for cmd in CMD_LIST.iter() {
-                println!("{}", cmd);
+
+    pub fn call_gtp(&mut self) {
+        let stdin = io::stdin();
+        for line in stdin.lock().lines() {
+            if !self.gtp(&line.unwrap()) {
+                break;
             }
-            send("");
-        },
-        "boardsize" => {
-            if let Some(arg) = args.get(0) {
-                let bs = arg.parse::<usize>().unwrap();
-                if bs == BSIZE {
-                    send("");
+        }
+    }
+
+    fn gtp(&mut self, line: &str) -> bool {
+        let line = line.trim_right();
+        if line.is_empty() {
+            return true;
+        }
+        let (command, args) = parse(line);
+        match command.unwrap() {
+            "protocol_version" => { send("2"); },
+            "name" => { send("AlphaGo9"); },
+            "version" => { send("1.0"); },
+            "list_commands" => {
+                print!("=");
+                for cmd in CMD_LIST.iter() {
+                    println!("{}", cmd);
+                }
+                send("");
+            },
+            "boardsize" => {
+                if let Some(arg) = args.get(0) {
+                    let bs = arg.parse::<usize>().unwrap();
+                    if bs == BSIZE {
+                        send("");
+                    } else {
+                        println!("?invalid boardsize\n");
+                    }
                 } else {
                     println!("?invalid boardsize\n");
                 }
-            } else {
-                println!("?invalid boardsize\n");
-            }
-        },
-        "komi" => {
-            if let Some(arg) = args.get(0) {
-                let bs = arg.parse::<f32>().unwrap();
-                if bs == KOMI {
-                    send("");
+            },
+            "komi" => {
+                if let Some(arg) = args.get(0) {
+                    let bs = arg.parse::<f32>().unwrap();
+                    if bs == KOMI {
+                        send("");
+                    } else {
+                        println!("?invalid komi\n");
+                    }
                 } else {
                     println!("?invalid komi\n");
                 }
-            } else {
-                println!("?invalid komi\n");
-            }
-        },
-        "time_settings" => {
-            tree.set_time(args[0].parse().unwrap(), args[1].parse().unwrap());
-            send("");
-        },
-        "time_left" => {
-            tree.set_left_time(args[1].parse().unwrap());
-            send("");
-        },
-        "clear_board" => {
-            b.clear();
-            tree.clear();
-            send("");
-        },
-        "genmove" => {
-            let (mov, win_rate) = if quick {
-                (rv2ev(np::argmax(&tree.evaluate(&b).unwrap().0)), 0.5)
-            } else {
-                tree.search(&b, 0.0, false, clean)
-            };
-            if win_rate < 0.1 {
-                send("resign");
-            } else {
-                let _ = b.play(mov, true);
-                send(&ev2str(mov));
-            }
-        },
-        "play" => {
-            let _ = b.play(str2ev(args[1]), false);
-            send("");
-        },
-        "undo" => {
-            let mut history = b.get_history().clone();
-            history.pop();
-            b.clear();
-            tree.clear();
-            for v in history {
-                let _ = b.play(v, false);
-            }
-            send("");
-        },
-        "gogui-play_sequence" => {
-            let mut a = args.iter();
-            while let Some(_) = a.next() {
-                if let Some(mov) = a.next() {
-                    let _ = b.play(str2ev(mov), false);
+            },
+            "time_settings" => {
+                self.tree.set_time(args[0].parse().unwrap(), args[1].parse().unwrap());
+                send("");
+            },
+            "time_left" => {
+                self.tree.set_left_time(args[1].parse().unwrap());
+                send("");
+            },
+            "clear_board" => {
+                self.b.clear();
+                self.tree.clear();
+                send("");
+            },
+            "genmove" => {
+                let (mov, win_rate) = if self.quick {
+                    (rv2ev(np::argmax(&self.tree.evaluate(&self.b).unwrap().0)), 0.5)
                 } else {
-                    break;
+                    self.tree.search(&self.b, 0.0, false, self.clean)
+                };
+                if win_rate < 0.1 {
+                    send("resign");
+                } else {
+                    let _ = self.b.play(mov, true);
+                    send(&ev2str(mov));
                 }
-            }
-            send("");
-        },
-        "showboard" => {
-            b.showboard();
-            send("");
-        },
-        "quit" => {
-            send("");
-            return false;
-        },
-        _ => {
-            println!("?unknown_command\n");
-        },
-    }
-    return true;
-}
-
-
-/// GTPコマンドを待ち受け、実行するループです。
-pub fn call_gtp(main_time: f32, byoyomi: f32, quick: bool, clean: bool) {
-    let mut b = Board::new();
-    let mut tree = Tree::new("frozen_model.pb");
-    tree.set_time(main_time, byoyomi);
-
-    let stdin = io::stdin();
-    for line in stdin.lock().lines() {
-        if !gtp(&mut b, &mut tree, line.unwrap(), quick, clean) {
-            break;
+            },
+            "play" => {
+                let _ = self.b.play(str2ev(args[1]), false);
+                send("");
+            },
+            "undo" => {
+                let mut history = self.b.get_history().clone();
+                history.pop();
+                self.b.clear();
+                self.tree.clear();
+                for v in history {
+                    let _ = self.b.play(v, false);
+                }
+                send("");
+            },
+            "gogui-play_sequence" => {
+                let mut a = args.iter();
+                while let Some(_) = a.next() {
+                    if let Some(mov) = a.next() {
+                        let _ = self.b.play(str2ev(mov), false);
+                    } else {
+                        break;
+                    }
+                }
+                send("");
+            },
+            "showboard" => {
+                self.b.showboard();
+                send("");
+            },
+            "quit" => {
+                send("");
+                return false;
+            },
+            _ => {
+                println!("?unknown_command\n");
+            },
         }
+        return true;
     }
 }
