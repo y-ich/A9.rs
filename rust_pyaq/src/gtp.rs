@@ -6,23 +6,30 @@ use board::*;
 use search::Tree;
 
 
-const CMD_LIST: [&str; 15] = [
-    "protocol_version",
-    "name",
-    "version",
-    "list_commands",
-    "boardsize",
-    "komi",
-    "time_settings",
-    "time_left",
-    "clear_board",
-    "genmove",
-    "play",
-    "undo",
-    "gogui-play_sequence",
-    "showboard",
-    "quit",
-];
+fn response_list_commands() {
+    const CMD_LIST: [&str; 15] = [
+        "protocol_version",
+        "name",
+        "version",
+        "list_commands",
+        "boardsize",
+        "komi",
+        "time_settings",
+        "time_left",
+        "clear_board",
+        "genmove",
+        "play",
+        "undo",
+        "gogui-play_sequence",
+        "showboard",
+        "quit",
+    ];
+    print!("=");
+    for cmd in CMD_LIST.iter() {
+        println!("{}", cmd);
+    }
+    println!("");
+}
 
 
 fn send(res_cmd: &str) {
@@ -85,11 +92,7 @@ impl GtpClient {
             "name" => { send("AlphaGo9"); },
             "version" => { send("1.0"); },
             "list_commands" => {
-                print!("=");
-                for cmd in CMD_LIST.iter() {
-                    println!("{}", cmd);
-                }
-                send("");
+                response_list_commands();
             },
             "boardsize" => {
                 if let Some(arg) = args.get(0) {
