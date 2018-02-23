@@ -8,14 +8,11 @@ getopts = "*"
 rand = "*"
 itertools = "*"
 
-[target.'cfg(not(feature = "wasm"))'.dependencies]
-tensorflow = { version = "*", features = ["tensorflow_unstable"] }
-
-[target.'cfg(feature = "wasm")'.dependencies]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
 stdweb = "*"
 
-[features]
-wasm = []
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tensorflow = { version = "*", features = ["tensorflow_unstable"] }
 
 [lib]
 name = "rust_pyaq_lib"
@@ -28,4 +25,3 @@ path = "src/main.rs"
 name = "rust_pyaq_wasm"
 path = "src/lib.rs"
 crate-type = ["cdylib"]
-required-features = ["wasm"]

@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target_arch = "wasm32"))]
 use tensorflow as tf;
 use constants::*;
 use stone_group::StoneGroup;
@@ -493,7 +493,7 @@ impl Board {
     }
 
     /// ニューラルネットワークへの入力を返します。
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn feature(&self) -> tf::Tensor<f32> {
         #[inline]
         fn index(p: usize, f: usize) -> usize {

@@ -5,13 +5,15 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::time;
 use itertools::multizip;
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target_arch = "wasm32"))]
 use tensorflow as tf;
 use utils::fill;
 use numpy as np;
 use constants::*;
 use board::*;
-#[cfg(not(feature = "wasm"))]
+#[cfg(target_arch = "wasm32")]
+use stdweb::{web, webcore::value};
+#[cfg(not(target_arch = "wasm32"))]
 use neural_network::NeuralNetwork;
 
 const MAX_NODE_CNT: usize = 16384; // 2 ^ 14
@@ -83,7 +85,7 @@ pub struct Tree {
     root_move_cnt: usize,
     node_hashs: HashMap<u64, usize>,
     eval_cnt: usize,
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(not(target_arch = "wasm32"))]
     nn: NeuralNetwork,
 }
 
@@ -99,7 +101,7 @@ impl Tree {
             root_move_cnt: 0,
             node_hashs: HashMap::new(),
             eval_cnt: 0,
-            #[cfg(not(feature = "wasm"))]
+            #[cfg(not(target_arch = "wasm32"))]
             nn: NeuralNetwork::new(ckpt_path),
         }
     }
@@ -128,8 +130,18 @@ impl Tree {
     }
 
     /// ニューラルネットワークを評価します。
-    // TODO - 責務としてはBoardなのだけど、ワーカーがグラフとセッションを管理するのでTreeが計算している。これでいいのかどうか。
-    #[cfg(not(feature = "wasm"))]
+    #[cfg(target_arch = "wasm32")]
+    pub fn evaluate(&mut self, b: &Board) -> Result<(web::TypedArray<f32>, web::TypedArray<f32>), Box<Error>>{
+        let feature = b.feature();
+        let result = js! { evaluate(@{feature}) };
+        if result == value::Null {
+            Box::new(Error::new())
+        } else {
+            Ok(result)
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn evaluate(&mut self, b: &Board) -> Result<(tf::Tensor<f32>, tf::Tensor<f32>), Box<Error>>{
         self.nn.evaluate(&b.feature())
     }
