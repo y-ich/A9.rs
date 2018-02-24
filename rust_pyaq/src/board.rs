@@ -18,7 +18,7 @@ fn ev2xy(ev: usize) -> (usize, usize) {
 
 /// 碁盤のxy座標を拡張碁盤の線形座標に変換します。
 #[inline]
-fn xy2ev(x: usize, y: usize) -> usize {
+pub fn xy2ev(x: usize, y: usize) -> usize {
     y * EBSIZE + x
 }
 

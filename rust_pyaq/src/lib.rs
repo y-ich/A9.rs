@@ -1,9 +1,10 @@
 #![feature(box_syntax)]
 #![feature(proc_macro)] // stdwebが使う
+extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
-extern crate itertools;
 extern crate rand;
+extern crate sgf;
 #[cfg(target_arch = "wasm32")]
 #[macro_use]
 extern crate stdweb;

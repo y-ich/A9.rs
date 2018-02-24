@@ -1,10 +1,11 @@
+use std::io;
 use numpy as np;
 use constants::*;
 use board::*;
 use search::Tree;
 
 fn response_list_commands() {
-    const CMD_LIST: [&str; 15] = [
+    const CMD_LIST: [&str; 16] = [
         "protocol_version",
         "name",
         "version",
@@ -19,6 +20,7 @@ fn response_list_commands() {
         "undo",
         "gogui-play_sequence",
         "showboard",
+        "loadsgf",
         "quit",
     ];
     print!("=");
@@ -44,6 +46,24 @@ fn parse(line: &str) -> (Option<&str>, Vec<&str>) {
         None
     };
     (command, args.collect())
+}
+
+fn move2xy(mov: &str) -> (usize, usize) {
+    const OFFSET: usize = 'a' as usize - 1;
+    let mut chars = mov.chars();
+    let first = chars.next().unwrap();
+    let second = chars.next().unwrap();
+    (first as usize - OFFSET, second as usize - OFFSET)
+}
+
+fn read_file(name: &str) -> io::Result<String> {
+    use std::fs::File;
+    use std::io::Read;
+
+    let mut file = File::open(name)?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    Ok(contents)
 }
 
 /// GTPコマンドを待ち受け、実行するワーカーです。
@@ -174,6 +194,42 @@ impl GtpClient {
             "showboard" => {
                 self.b.showboard();
                 send("");
+            }
+            "loadsgf" => {
+                use sgf::SgfCollection;
+                if let Some(filename) = args.get(0) {
+                    if let Ok(sgf) = read_file(filename) {
+                        if let Ok(collection) = SgfCollection::from_sgf(&sgf) {
+                            self.b.clear();
+                            self.tree.clear();
+                            let mn = if let Some(mn) = args.get(1) {
+                                mn.parse::<usize>().unwrap()
+                            } else {
+                                usize::max_value()
+                            };
+                            let mut node = &collection[0];
+                            let mut n = 0;
+                            while node.children.len() > 0 {
+                                if n >= mn {
+                                    break;
+                                }
+                                node = &node.children[0];
+                                if let Ok(point) = node.get_point("B").or(node.get_point("W")) {
+                                    let (x, y) = move2xy(&point);
+                                    let _ = self.b.play(xy2ev(x, y), false);
+                                }
+                                n += 1;
+                            }
+                            send("");
+                        } else {
+                            println!("?invalid sgf\n");
+                        }
+                    } else {
+                        println!("?cannot open file\n");
+                    }
+                } else {
+                    println!("?missing filename\n");
+                }
             }
             "quit" => {
                 send("");
