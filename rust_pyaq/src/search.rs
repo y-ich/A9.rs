@@ -1,12 +1,9 @@
 use std::usize;
 use std::cmp::{max, min};
-use std::mem;
 use std::collections::HashMap;
 use std::time;
-use itertools::multizip;
 #[cfg(not(target_arch = "wasm32"))]
 use tensorflow as tf;
-use utils::fill;
 use numpy as np;
 use constants::*;
 use board::*;
@@ -41,13 +38,16 @@ struct Node {
 
 impl Node {
     pub fn new() -> Self {
-        let mut node: Self = unsafe { mem::uninitialized() };
+        use std::mem::uninitialized;
+        let mut node: Self = unsafe { uninitialized() };
         node.init_branch();
         node.clear();
         node
     }
 
     pub fn init_branch(&mut self) {
+        use utils::fill;
+
         fill(&mut self.mov, VNULL);
         fill(&mut self.prob, 0.0);
         fill(&mut self.value, 0.0);
@@ -214,6 +214,7 @@ impl Tree {
         let next_move;
         let is_head_node;
         {
+            use itertools::multizip;
             // 上記変数を計算し、下記ndを解放するためのブロック
             let nd = self.node.get(node_id).unwrap(); // Copyを避けるためにget
             let nd_rate = if nd.total_cnt == 0 {

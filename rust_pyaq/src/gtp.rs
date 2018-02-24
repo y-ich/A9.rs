@@ -1,5 +1,3 @@
-use std::vec::Vec;
-use std::io::{self, BufRead};
 use numpy as np;
 use constants::*;
 use board::*;
@@ -69,6 +67,7 @@ impl GtpClient {
     }
 
     pub fn call_gtp(&mut self) {
+        use std::io::{self, BufRead};
         let stdin = io::stdin();
         for line in stdin.lock().lines() {
             if !self.gtp(&line.unwrap()) {

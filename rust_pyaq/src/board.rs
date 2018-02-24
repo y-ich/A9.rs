@@ -1,5 +1,4 @@
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 #[cfg(not(target_arch = "wasm32"))]
 use tensorflow as tf;
 use constants::*;
@@ -557,6 +556,7 @@ impl Board {
 
     /// 局面のハッシュを返します。
     pub fn hash(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
         let mut hasher = DefaultHasher::new();
         self.state.hash(&mut hasher);
         let h1 = hasher.finish();

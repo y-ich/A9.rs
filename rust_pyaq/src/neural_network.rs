@@ -1,6 +1,6 @@
 use std::fs::File;
-use std::io::Read;
 use std::error::Error;
+use std::io::Read;
 use tensorflow as tf;
 
 /// ポリシーネットワークとバリューネットワークを併せ持つニューラルネットワークです。

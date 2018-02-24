@@ -1,5 +1,4 @@
 use std::hash::Hash;
-use std::collections::HashMap;
 
 /// 配列を指定の値vで埋めます。
 pub fn fill<T: Copy>(array: &mut [T], v: T) {
@@ -18,6 +17,8 @@ fn test_fill() {
 /// 配列の中で最も出現頻度の高い要素を返します。
 /// 空の配列を渡すとpanicします。
 pub fn most_common<T: Hash + Eq>(array: &[T]) -> &T {
+    use std::collections::HashMap;
+
     let mut map = HashMap::new();
     for e in array {
         let counter = map.entry(e).or_insert(0);
