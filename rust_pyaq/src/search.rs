@@ -1,5 +1,3 @@
-use std::usize;
-use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::time;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -54,7 +52,7 @@ impl Node {
         fill(&mut self.value, 0.0);
         fill(&mut self.value_win, 0.0);
         fill(&mut self.visit_cnt, 0);
-        fill(&mut self.next_id, usize::MAX);
+        fill(&mut self.next_id, usize::max_value());
         fill(&mut self.next_hash, 0);
         fill(&mut self.evaluated, false);
     }
@@ -64,7 +62,7 @@ impl Node {
         self.total_value = 0.0;
         self.total_cnt = 0;
         self.hash = 0;
-        self.move_cnt = usize::MAX;
+        self.move_cnt = usize::max_value();
     }
 }
 
@@ -156,7 +154,7 @@ impl Tree {
         }
         for i in 0..MAX_NODE_CNT {
             let mc = self.node[i].move_cnt;
-            if mc < usize::MAX && mc < self.root_move_cnt {
+            if mc < usize::max_value() && mc < self.root_move_cnt {
                 self.node_hashs.remove(&self.node[i].hash);
                 self.node[i].clear()
             }
@@ -174,7 +172,7 @@ impl Tree {
 
         let mut node_id = hs as usize % MAX_NODE_CNT;
 
-        while self.node[node_id].move_cnt != usize::MAX {
+        while self.node[node_id].move_cnt != usize::max_value() {
             node_id = if node_id + 1 < MAX_NODE_CNT {
                 node_id + 1
             } else {
@@ -201,7 +199,7 @@ impl Tree {
             }
         }
 
-        return node_id;
+        node_id
     }
 
     /// node_idのノードの先を探索し、ValueNetworkの値を返します。
@@ -278,7 +276,7 @@ impl Tree {
         nd.value_win[best] += value;
         nd.visit_cnt[best] += 1;
 
-        return value;
+        value
     }
 
     /// time_で決定される時間の間、MCTSを実行し、最も勝率の高い着手と勝率を返します。
@@ -292,19 +290,19 @@ impl Tree {
             TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 };
         }
 
+        if self.node[self.root_id].branch_cnt <= 1 {
+            eprintln!("\nmove count={}:", b.get_move_cnt() + 1);
+            self.print_info(self.root_id);
+            return (PASS, 0.5);
+        }
+
+        self.delete_node();
+
         let mut best;
         let mut second;
         let stand_out;
         let almost_win;
         {
-            if self.node[self.root_id].branch_cnt <= 1 {
-                eprintln!("\nmove count={}:", b.get_move_cnt() + 1);
-                self.print_info(self.root_id);
-                return (PASS, 0.5);
-            }
-
-            self.delete_node();
-
             let nd = self.node.get(self.root_id).unwrap();
 
             let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
@@ -322,7 +320,7 @@ impl Tree {
                 if self.main_time == 0.0 || self.left_time < self.byoyomi * 2.0 {
                     time_ = self.byoyomi.max(1.0);
                 } else {
-                    time_ = self.left_time / (55.0 + max(50 - b.get_move_cnt(), 0) as f32);
+                    time_ = self.left_time / (55.0 + (50 - b.get_move_cnt()).max(0) as f32);
                 }
             }
             // search
@@ -367,18 +365,18 @@ impl Tree {
             self.left_time = (self.left_time - duration2float(start.elapsed().unwrap())).max(0.0);
         }
 
-        return (next_move, win_rate);
+        (next_move, win_rate)
     }
 
     fn has_next(&self, node_id: usize, br_id: usize, move_cnt: usize) -> bool {
         let nd = self.node.get(node_id).unwrap();
         let next_id = nd.next_id[br_id];
-        next_id < usize::MAX && nd.next_hash[br_id] == self.node[next_id].hash
+        next_id < usize::max_value() && nd.next_hash[br_id] == self.node[next_id].hash
             && self.node[next_id].move_cnt == move_cnt
     }
 
     fn branch_rate(&self, nd: &Node, id: usize) -> f32 {
-        nd.value_win[id] / max(nd.visit_cnt[id], 1) as f32 / 2.0 + 0.5
+        nd.value_win[id] / nd.visit_cnt[id].max(1) as f32 / 2.0 + 0.5
     }
 
     fn best_sequence(&self, node_id: usize, head_move: usize) -> String {
@@ -412,7 +410,7 @@ impl Tree {
         let nd = self.node.get(node_id).unwrap();
         let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
         eprintln!("|move|count  |rate |value|prob | best sequence");
-        for i in 0..min(order_.len(), 9) {
+        for i in 0..order_.len().min(9) {
             let m = order_[i];
             let visit_cnt = nd.visit_cnt[m];
             if visit_cnt == 0 {
