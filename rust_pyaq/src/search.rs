@@ -185,7 +185,7 @@ impl Tree {
         }
         self.node_cnt += 1;
 
-        let nd = self.node.get_mut(node_id).unwrap();
+        let nd = &mut self.node[node_id];
         nd.clear();
         nd.move_cnt = b_info.1;
         nd.hash = hs;
@@ -217,7 +217,7 @@ impl Tree {
             // 上記変数を計算し、下記ndを解放するためのブロック
             use itertools::multizip;
 
-            let nd = self.node.get(node_id).unwrap(); // Copyを避けるためにget
+            let nd = &self.node[node_id];
             let nd_rate = if nd.total_cnt == 0 {
                 0.0
             } else {
@@ -251,7 +251,7 @@ impl Tree {
                 self.eval_cnt += 1;
                 let value = -value_[0];
                 {
-                    let nd = self.node.get_mut(node_id).unwrap();
+                    let mut nd = &mut self.node[node_id];
                     nd.value[best] = value;
                     nd.evaluated[best] = true;
                 }
@@ -263,7 +263,7 @@ impl Tree {
                 let next_id = self.create_node(b.info(), &prob_);
 
                 {
-                    let nd = self.node.get_mut(node_id).unwrap();
+                    let nd = &mut self.node[node_id];
                     nd.next_id[best] = next_id;
                     nd.next_hash[best] = b.hash();
 
@@ -276,7 +276,7 @@ impl Tree {
             -self.search_branch(b, next_id, route)
         };
 
-        let nd = self.node.get_mut(node_id).unwrap();
+        let nd = &mut self.node[node_id];
         nd.total_value += value;
         nd.total_cnt += 1;
         nd.value_win[best] += value;
@@ -309,13 +309,13 @@ impl Tree {
         let stand_out;
         let almost_win;
         {
-            let nd = self.node.get(self.root_id).unwrap();
+            let nd = &self.node[self.root_id];
 
             let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
             best = order_[0];
             second = order_[1];
 
-            let win_rate = self.branch_rate(&nd, best);
+            let win_rate = self.branch_rate(nd, best);
 
             stand_out = nd.total_cnt > 5000 && nd.visit_cnt[best] > nd.visit_cnt[second] * 100;
             almost_win = nd.total_cnt > 5000 && (win_rate < 0.1 || win_rate > 0.9);
@@ -346,13 +346,13 @@ impl Tree {
                     break;
                 }
             }
-            let nd = self.node.get(self.root_id).unwrap();
+            let nd = &self.node[self.root_id];
             let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
             best = order_[0];
             second = order_[1];
         }
 
-        let nd = self.node.get(self.root_id).unwrap();
+        let nd = &self.node[self.root_id];
         let mut next_move = nd.mov[best];
         let mut win_rate = self.branch_rate(&nd, best);
 
@@ -375,7 +375,7 @@ impl Tree {
     }
 
     fn has_next(&self, node_id: usize, br_id: usize, move_cnt: usize) -> bool {
-        let nd = self.node.get(node_id).unwrap();
+        let nd = &self.node[node_id];
         let next_id = nd.next_id[br_id];
         next_id < usize::max_value() && nd.next_hash[br_id] == self.node[next_id].hash
             && self.node[next_id].move_cnt == move_cnt
@@ -391,7 +391,7 @@ impl Tree {
         let mut next_move = head_move;
 
         for _ in 0..7 {
-            let nd = self.node.get(node_id).unwrap();
+            let nd = &self.node[node_id];
             if next_move == PASS || nd.branch_cnt < 1 {
                 break;
             }
@@ -413,7 +413,7 @@ impl Tree {
     }
 
     pub fn print_info(&self, node_id: usize) {
-        let nd = self.node.get(node_id).unwrap();
+        let nd = &self.node[node_id];
         let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
         eprintln!("|move|count  |rate |value|prob | best sequence");
         for i in 0..order_.len().min(9) {
