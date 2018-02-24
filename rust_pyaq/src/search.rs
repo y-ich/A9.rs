@@ -250,20 +250,26 @@ impl Tree {
                 let (prob_, value_) = self.evaluate(b);
                 self.eval_cnt += 1;
                 let value = -value_[0];
-                self.node[node_id].value[best] = value;
-                self.node[node_id].evaluated[best] = true;
+                {
+                    let nd = self.node.get_mut(node_id).unwrap();
+                    nd.value[best] = value;
+                    nd.evaluated[best] = true;
+                }
 
-                if self.node_cnt as f32 > 0.85 * MAX_NODE_CNT as f32 {
+                if self.node_cnt > (0.85 * MAX_NODE_CNT as f32) as usize {
                     self.delete_node();
                 }
 
                 let next_id = self.create_node(b.info(), &prob_);
 
-                self.node[node_id].next_id[best] = next_id;
-                self.node[node_id].next_hash[best] = b.hash();
+                {
+                    let nd = self.node.get_mut(node_id).unwrap();
+                    nd.next_id[best] = next_id;
+                    nd.next_hash[best] = b.hash();
 
-                self.node[next_id].total_value -= self.node[node_id].value_win[best];
-                self.node[next_id].total_cnt += self.node[node_id].visit_cnt[best];
+                    nd.total_value -= nd.value_win[best];
+                    nd.total_cnt += nd.visit_cnt[best];
+                }
                 value
             }
         } else {
