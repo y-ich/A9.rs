@@ -7,6 +7,7 @@ authors = ["Yuji Ichikawa <ichikawa.yuji@gmail.com>"]
 getopts = "*"
 rand = "*"
 itertools = "*"
+lazy_static = "*"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 stdweb = "*"

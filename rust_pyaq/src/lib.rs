@@ -1,5 +1,7 @@
 #![feature(box_syntax)]
 #![feature(proc_macro)] // stdwebが使う
+#[macro_use]
+extern crate lazy_static;
 extern crate itertools;
 extern crate rand;
 #[cfg(target_arch = "wasm32")]

@@ -2,6 +2,7 @@ use std::usize;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::time;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use tensorflow as tf;
 use numpy as np;
@@ -67,7 +68,11 @@ impl Node {
     }
 }
 
-static mut TREE_STOP: bool = false;
+/// ポンダーを実装するためのフラグ。未使用。
+lazy_static! {
+    static ref TREE_STOP: AtomicBool = AtomicBool::new(false);
+}
+/// UCB1のCp関連の係数？
 static mut TREE_CP: f32 = 2.0;
 
 /// MCTSを実行するワーカー構造体です。
@@ -121,9 +126,7 @@ impl Tree {
         self.root_move_cnt = 0;
         self.node_hashs.clear();
         self.eval_cnt = 0;
-        unsafe {
-            TREE_STOP = false;
-        }
+        TREE_STOP.store(false, Ordering::Relaxed);
     }
 
     /// ニューラルネットワークを評価します。
@@ -201,6 +204,7 @@ impl Tree {
         return node_id;
     }
 
+    /// node_idのノードの先を探索し、ValueNetworkの値を返します。
     fn search_branch(
         &mut self,
         b: &mut Board,
@@ -230,15 +234,14 @@ impl Tree {
                 .map(|(r, &p, &c)| r + cpsv * p / (c + 1) as f32)
                 .take(nd.branch_cnt);
             best = np::argmax(action_value);
-
-            route.push((node_id, best));
             next_id = nd.next_id[best];
             next_move = nd.mov[best];
             is_head_node = !self.has_next(node_id, best, b.get_move_cnt() + 1)
                 || nd.visit_cnt[best] < EXPAND_CNT
-                || (b.get_move_cnt() > BVCNT * 2)
+                || b.get_move_cnt() > BVCNT * 2
                 || (next_move == PASS && b.get_prev_move() == PASS);
         }
+        route.push((node_id, best));
 
         let _ = b.play(next_move, false);
 
@@ -332,15 +335,11 @@ impl Tree {
                 let root_id = self.root_id;
                 self.search_branch(&mut b_cpy, root_id, &mut route);
                 search_idx += 1;
-                if search_idx % 64 == 0 {
-                    if (ponder && unsafe { TREE_STOP })
-                        || duration2float(start.elapsed().unwrap()) > time_
-                    {
-                        unsafe {
-                            TREE_STOP = false;
-                        }
-                        break;
-                    }
+                if search_idx % 64 == 0 && (ponder && TREE_STOP.load(Ordering::Relaxed))
+                    || duration2float(start.elapsed().unwrap()) > time_
+                {
+                    TREE_STOP.store(false, Ordering::Relaxed);
+                    break;
                 }
             }
             let nd = self.node.get(self.root_id).unwrap();
