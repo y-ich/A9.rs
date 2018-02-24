@@ -5,7 +5,6 @@ use constants::*;
 use board::*;
 use search::Tree;
 
-
 fn response_list_commands() {
     const CMD_LIST: [&str; 15] = [
         "protocol_version",
@@ -31,11 +30,9 @@ fn response_list_commands() {
     println!("");
 }
 
-
 fn send(res_cmd: &str) {
     println!("= {}\n", res_cmd);
 }
-
 
 fn parse(line: &str) -> (Option<&str>, Vec<&str>) {
     let mut args = line.split_whitespace();
@@ -50,7 +47,6 @@ fn parse(line: &str) -> (Option<&str>, Vec<&str>) {
     };
     (command, args.collect())
 }
-
 
 /// GTPコマンドを待ち受け、実行するワーカーです。
 pub struct GtpClient {
@@ -88,12 +84,18 @@ impl GtpClient {
         }
         let (command, args) = parse(line);
         match command.unwrap() {
-            "protocol_version" => { send("2"); },
-            "name" => { send("AlphaGo9"); },
-            "version" => { send("1.0"); },
+            "protocol_version" => {
+                send("2");
+            }
+            "name" => {
+                send("AlphaGo9");
+            }
+            "version" => {
+                send("1.0");
+            }
             "list_commands" => {
                 response_list_commands();
-            },
+            }
             "boardsize" => {
                 if let Some(arg) = args.get(0) {
                     let bs = arg.parse::<usize>().unwrap();
@@ -105,7 +107,7 @@ impl GtpClient {
                 } else {
                     println!("?invalid boardsize\n");
                 }
-            },
+            }
             "komi" => {
                 if let Some(arg) = args.get(0) {
                     let bs = arg.parse::<f32>().unwrap();
@@ -117,20 +119,21 @@ impl GtpClient {
                 } else {
                     println!("?invalid komi\n");
                 }
-            },
+            }
             "time_settings" => {
-                self.tree.set_time(args[0].parse().unwrap(), args[1].parse().unwrap());
+                self.tree
+                    .set_time(args[0].parse().unwrap(), args[1].parse().unwrap());
                 send("");
-            },
+            }
             "time_left" => {
                 self.tree.set_left_time(args[1].parse().unwrap());
                 send("");
-            },
+            }
             "clear_board" => {
                 self.b.clear();
                 self.tree.clear();
                 send("");
-            },
+            }
             "genmove" => {
                 let (mov, win_rate) = if self.quick {
                     (rv2ev(np::argmax(&self.tree.evaluate(&self.b).0)), 0.5)
@@ -143,11 +146,11 @@ impl GtpClient {
                     let _ = self.b.play(mov, true);
                     send(&ev2str(mov));
                 }
-            },
+            }
             "play" => {
                 let _ = self.b.play(str2ev(args[1]), false);
                 send("");
-            },
+            }
             "undo" => {
                 let mut history = self.b.get_history().clone();
                 history.pop();
@@ -157,7 +160,7 @@ impl GtpClient {
                     let _ = self.b.play(v, false);
                 }
                 send("");
-            },
+            }
             "gogui-play_sequence" => {
                 let mut a = args.iter();
                 while let Some(_) = a.next() {
@@ -168,18 +171,18 @@ impl GtpClient {
                     }
                 }
                 send("");
-            },
+            }
             "showboard" => {
                 self.b.showboard();
                 send("");
-            },
+            }
             "quit" => {
                 send("");
                 return false;
-            },
+            }
             _ => {
                 println!("?unknown_command\n");
-            },
+            }
         }
         return true;
     }

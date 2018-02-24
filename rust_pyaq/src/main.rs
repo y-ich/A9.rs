@@ -2,7 +2,6 @@
 /// rust_pyaq: Pyaq(https://github.com/ymgaq/Pyaq)のRustへの移植コード
 /// 作者: 市川雄二
 /// ライセンス: MIT
-
 extern crate getopts;
 extern crate rust_pyaq_lib;
 
@@ -80,8 +79,8 @@ fn main() {
     let opts = make_opts();
     let args: Vec<String> = std::env::args().collect();
     let matches = match opts.parse(&args[1..]) {
-        Ok(m) => { m }
-        Err(f) => { panic!(f.to_string()) }
+        Ok(m) => m,
+        Err(f) => panic!(f.to_string()),
     };
     if matches.opt_present("h") {
         print_usage(&args[0], opts);
@@ -95,14 +94,20 @@ fn main() {
     let quick = matches.opt_present("quick");
     let random = matches.opt_present("random");
     let clean = matches.opt_present("clean");
-    let main_time = matches.opt_str("main_time").and_then(|s| s.parse().ok()).unwrap_or(0.0);
-    let byoyomi = matches.opt_str("byoyomi").and_then(|s| s.parse().ok()).unwrap_or(3.0);
+    let main_time = matches
+        .opt_str("main_time")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0.0);
+    let byoyomi = matches
+        .opt_str("byoyomi")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3.0);
     // let use_gpu = !matches.opt_present("cpu");
 
     match launch_mode {
         LaunchMode::Gtp => {
             gtp::GtpClient::new(main_time, byoyomi, quick, clean).call_gtp();
-        },
+        }
         LaunchMode::SelfPlay => {
             let end_position = if random {
                 random_self_play(BVCNT * 2)
@@ -118,6 +123,6 @@ fn main() {
                 format!("{}+{:.1}", winner, score.abs())
             };
             eprintln!("result: {}", result_str);
-        },
+        }
     }
 }

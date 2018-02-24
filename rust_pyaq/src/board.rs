@@ -6,9 +6,10 @@ use constants::*;
 use stone_group::StoneGroup;
 
 const KEEP_PREV_CNT: usize = 2;
-const FEATURE_CNT: usize = KEEP_PREV_CNT * 2 + 3;  // 7
-const X_LABELS: [char; 19] = ['A','B','C','D','E','F','G','H','J','K','L','M','N','O','P','Q','R','S','T'];
-
+const FEATURE_CNT: usize = KEEP_PREV_CNT * 2 + 3; // 7
+const X_LABELS: [char; 19] = [
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'
+];
 
 /// 拡張碁盤の線形座標をxy座標に変換します。
 #[inline]
@@ -41,7 +42,6 @@ fn ev2rv(ev: usize) -> usize {
         ev % EBSIZE - 1 + (ev / EBSIZE - 1) * BSIZE
     }
 }
-
 
 /// 拡張碁盤の線形座標を碁盤の座標の文字表現に変換します。
 pub fn ev2str(ev: usize) -> String {
@@ -77,16 +77,19 @@ fn neighbors(v: usize) -> [usize; 4] {
 
 /// 拡張碁盤の線形座標vの点の斜め隣接点の線形座標の配列を返します。
 fn diagonals(v: usize) -> [usize; 4] {
-    [v + EBSIZE - 1, v + EBSIZE - 1, v - EBSIZE - 1, v - EBSIZE + 1]
+    [
+        v + EBSIZE - 1,
+        v + EBSIZE - 1,
+        v - EBSIZE - 1,
+        v - EBSIZE + 1,
+    ]
 }
-
 
 /// 着手に関するエラーです。
 pub enum Error {
     Illegal,
     FillEye,
 }
-
 
 /// 石の色や手番を表す列挙型です。
 #[derive(Clone, Copy, PartialEq, Hash)]
@@ -103,7 +106,6 @@ impl Color {
         }
     }
 }
-
 
 // 交点の状態を表す列挙型です。
 #[derive(Clone, Copy, PartialEq, Hash)]
@@ -124,12 +126,11 @@ impl Intersection {
     }
 }
 
-
 /// 盤上の局面を表し、操作するための構造体です。
 pub struct Board {
     state: [Intersection; EBVCNT], // 盤上の状態
-    id: [usize; EBVCNT], // StoneGroupのid
-    next: [usize; EBVCNT], // 同じStoneGroupの次の石の座標
+    id: [usize; EBVCNT],           // StoneGroupのid
+    next: [usize; EBVCNT],         // 同じStoneGroupの次の石の座標
     sg: Vec<StoneGroup>, // TODO - Copyでない構造体の配列の初期化の方法がわからなかったので、Vecにした
     prev_state: [[Intersection; EBVCNT]; KEEP_PREV_CNT],
     ko: usize,
@@ -316,14 +317,14 @@ impl Board {
             match c {
                 Intersection::Empty => {
                     return true; // 一つでもダメが空いていれば着手可能
-                },
+                }
                 Intersection::Stone(c) => {
                     stone_cnt[c as usize] += 1;
                     if self.sg[self.id[nv]].get_lib_cnt() == 1 {
                         atr_cnt[c as usize] += 1;
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
         atr_cnt[self.turn.opponent() as usize] != 0 || // 相手の石が取れるか
@@ -350,9 +351,10 @@ impl Board {
         let wedge_cnt = diag_cnt[pl.opponent() as usize] + if diag_cnt[3] > 0 { 1 } else { 0 };
         if wedge_cnt == 2 {
             for &nv in &diagonals(v) {
-                if self.state[nv] == Intersection::Stone(pl.opponent()) &&
-                    self.sg[self.id[nv]].get_lib_cnt() == 1 &&
-                    self.sg[self.id[nv]].get_v_atr() != self.ko {
+                if self.state[nv] == Intersection::Stone(pl.opponent())
+                    && self.sg[self.id[nv]].get_lib_cnt() == 1
+                    && self.sg[self.id[nv]].get_v_atr() != self.ko
+                {
                     return true;
                 }
             }
@@ -378,9 +380,8 @@ impl Board {
             self.place_stone(v);
             let id = self.id[v];
             self.ko = VNULL;
-            if self.remove_cnt == 1 &&
-                self.sg[id].get_lib_cnt() == 1 &&
-                self.sg[id].get_size() == 1 {
+            if self.remove_cnt == 1 && self.sg[id].get_lib_cnt() == 1 && self.sg[id].get_size() == 1
+            {
                 self.ko = self.sg[id].get_v_atr();
             }
         }
@@ -395,8 +396,16 @@ impl Board {
     pub fn random_play(&mut self) -> usize {
         use rand::{thread_rng, Rng};
 
-        let mut empty_list: Vec<usize> = self.state.iter().enumerate()
-            .filter_map(|(i, &e)| if e == Intersection::Empty { Some(i) } else { None })
+        let mut empty_list: Vec<usize> = self.state
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &e)| {
+                if e == Intersection::Empty {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
             .collect();
         let mut rng = thread_rng();
         rng.shuffle(&mut empty_list);
@@ -427,7 +436,8 @@ impl Board {
                 }
                 if nbr_cnt[Color::White as usize] > 0 && nbr_cnt[Color::Black as usize] == 0 {
                     stone_cnt[Color::White as usize] += 1;
-                } else if nbr_cnt[Color::Black as usize] > 0 && nbr_cnt[Color::White as usize] == 0 {
+                } else if nbr_cnt[Color::Black as usize] > 0 && nbr_cnt[Color::White as usize] == 0
+                {
                     stone_cnt[Color::Black as usize] += 1;
                 }
             }
@@ -475,13 +485,9 @@ impl Board {
                         } else {
                             format!(" {} ", stone_str)
                         }
-                    },
-                    Intersection::Empty => {
-                        " . ".to_string()
-                    },
-                    _ => {
-                        " ? ".to_string()
                     }
+                    Intersection::Empty => " . ".to_string(),
+                    _ => " ? ".to_string(),
                 };
                 line_str.push_str(&x_str);
             }
@@ -520,17 +526,28 @@ impl Board {
                 if self.state[rv2ev(p)] == my { 1.0 } else { 0.0 };
         }
         for p in 0..BVCNT {
-            *feature_.get_mut(index(p, 1)).unwrap() =
-                if self.state[rv2ev(p)] == opp { 1.0 } else { 0.0 };
+            *feature_.get_mut(index(p, 1)).unwrap() = if self.state[rv2ev(p)] == opp {
+                1.0
+            } else {
+                0.0
+            };
         }
         for i in 0..KEEP_PREV_CNT {
             for p in 0..BVCNT {
                 *feature_.get_mut(index(p, (i + 1) * 2)).unwrap() =
-                    if self.prev_state[i][rv2ev(p)] == my { 1.0 } else { 0.0 };
+                    if self.prev_state[i][rv2ev(p)] == my {
+                        1.0
+                    } else {
+                        0.0
+                    };
             }
             for p in 0..BVCNT {
                 *feature_.get_mut(index(p, (i + 1) * 2 + 1)).unwrap() =
-                    if self.prev_state[i][rv2ev(p)] == opp { 1.0 } else { 0.0 };
+                    if self.prev_state[i][rv2ev(p)] == opp {
+                        1.0
+                    } else {
+                        0.0
+                    };
             }
         }
         for p in 0..BVCNT {
@@ -551,14 +568,17 @@ impl Board {
 
     /// 局面の情報を返します。
     pub fn info(&self) -> (u64, usize, Vec<usize>) {
-        let mut cand_list: Vec<usize> = self.state.iter().enumerate()
-            .filter_map(|(v, &e)|
+        let mut cand_list: Vec<usize> = self.state
+            .iter()
+            .enumerate()
+            .filter_map(|(v, &e)| {
                 if e == Intersection::Empty && self.legal(v) && !self.eyeshape(v, self.turn) {
                     Some(ev2rv(v))
                 } else {
                     None
                 }
-            ).collect();
+            })
+            .collect();
         cand_list.push(ev2rv(PASS));
         (self.hash(), self.move_cnt, cand_list)
     }

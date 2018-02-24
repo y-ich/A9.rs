@@ -1,6 +1,5 @@
 //! numpyとは全く関係ありませんが、Pyaqで使われているnumpyのヘルパー関数の代わりの関数を提供します
 
-
 /// 配列の中の最大値のインデックスを返します。
 /// 空の配列を渡すとpanicします。
 pub fn argmax<T: PartialOrd>(array: &[T]) -> usize {
@@ -21,10 +20,12 @@ pub fn argsort<T: PartialOrd>(array: &[T], reverse: bool) -> Vec<usize> {
     use std::cmp::Ordering;
 
     let mut en: Vec<(usize, &T)> = array.iter().enumerate().collect();
-    en.sort_by(|a, b| if reverse {
-        b.1.partial_cmp(a.1).unwrap_or(Ordering::Equal)
-    } else {
-        a.1.partial_cmp(b.1).unwrap_or(Ordering::Equal)
+    en.sort_by(|a, b| {
+        if reverse {
+            b.1.partial_cmp(a.1).unwrap_or(Ordering::Equal)
+        } else {
+            a.1.partial_cmp(b.1).unwrap_or(Ordering::Equal)
+        }
     });
     en.into_iter().map(|e| e.0).collect()
 }

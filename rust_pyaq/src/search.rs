@@ -1,5 +1,5 @@
 use std::usize;
-use std::cmp::{min, max};
+use std::cmp::{max, min};
 use std::mem;
 use std::collections::HashMap;
 use std::time;
@@ -15,7 +15,6 @@ use neural_network::NeuralNetwork;
 
 const MAX_NODE_CNT: usize = 16384; // 2 ^ 14
 const EXPAND_CNT: usize = 8;
-
 
 fn duration2float(d: time::Duration) -> f32 {
     d.as_secs() as f32 + d.subsec_nanos() as f32 / 1000_000_000.0
@@ -68,7 +67,6 @@ impl Node {
     }
 }
 
-
 static mut TREE_STOP: bool = false;
 static mut TREE_CP: f32 = 2.0;
 
@@ -83,8 +81,7 @@ pub struct Tree {
     root_move_cnt: usize,
     node_hashs: HashMap<u64, usize>,
     eval_cnt: usize,
-    #[cfg(not(target_arch = "wasm32"))]
-    nn: NeuralNetwork,
+    #[cfg(not(target_arch = "wasm32"))] nn: NeuralNetwork,
 }
 
 impl Tree {
@@ -124,13 +121,15 @@ impl Tree {
         self.root_move_cnt = 0;
         self.node_hashs.clear();
         self.eval_cnt = 0;
-        unsafe { TREE_STOP = false; }
+        unsafe {
+            TREE_STOP = false;
+        }
     }
 
     /// ニューラルネットワークを評価します。
     #[cfg(target_arch = "wasm32")]
     pub fn evaluate(&mut self, b: &Board) -> (Vec<f32>, Vec<f32>) {
-        use stdweb::{UnsafeTypedArray, Reference};
+        use stdweb::{Reference, UnsafeTypedArray};
         use stdweb::web::TypedArray;
         use stdweb::unstable::TryInto;
         let feature = &b.feature();
@@ -138,7 +137,10 @@ impl Tree {
         let mut array: Vec<Reference> = js! { evaluate(@{feature}) }.try_into().unwrap();
         let first = array.remove(0);
         let second = array.remove(0);
-        (first.downcast::<TypedArray<f32>>().unwrap().to_vec(), second.downcast::<TypedArray<f32>>().unwrap().to_vec())
+        (
+            first.downcast::<TypedArray<f32>>().unwrap().to_vec(),
+            second.downcast::<TypedArray<f32>>().unwrap().to_vec(),
+        )
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -163,16 +165,20 @@ impl Tree {
     fn create_node(&mut self, b_info: (u64, usize, Vec<usize>), prob: &[f32]) -> usize {
         let hs = b_info.0;
 
-        if self.node_hashs.contains_key(&hs) &&
-            self.node[self.node_hashs[&hs]].hash == hs &&
-            self.node[self.node_hashs[&hs]].move_cnt == b_info.1 {
+        if self.node_hashs.contains_key(&hs) && self.node[self.node_hashs[&hs]].hash == hs
+            && self.node[self.node_hashs[&hs]].move_cnt == b_info.1
+        {
             return self.node_hashs[&hs];
         }
 
         let mut node_id = hs as usize % MAX_NODE_CNT;
 
         while self.node[node_id].move_cnt != usize::MAX {
-            node_id = if node_id + 1 < MAX_NODE_CNT { node_id + 1 } else { 0 };
+            node_id = if node_id + 1 < MAX_NODE_CNT {
+                node_id + 1
+            } else {
+                0
+            };
         }
 
         if let Some(hash) = self.node_hashs.get_mut(&hs) {
@@ -197,30 +203,43 @@ impl Tree {
         return node_id;
     }
 
-    fn search_branch(&mut self, b: &mut Board, node_id: usize, route: &mut Vec<(usize, usize)>) -> f32 {
+    fn search_branch(
+        &mut self,
+        b: &mut Board,
+        node_id: usize,
+        route: &mut Vec<(usize, usize)>,
+    ) -> f32 {
         let best;
         let next_id;
         let next_move;
         let is_head_node;
-        { // 上記変数を計算し、下記ndを解放するためのブロック
+        {
+            // 上記変数を計算し、下記ndを解放するためのブロック
             let nd = self.node.get(node_id).unwrap(); // Copyを避けるためにget
-            let nd_rate = if nd.total_cnt == 0 { 0.0 } else { nd.total_value / nd.total_cnt as f32 };
+            let nd_rate = if nd.total_cnt == 0 {
+                0.0
+            } else {
+                nd.total_value / nd.total_cnt as f32
+            };
             let cpsv = unsafe { TREE_CP } * (nd.total_cnt as f32).sqrt();
-            let rate: Vec<f32> = nd.value_win.iter().zip(nd.visit_cnt.iter())
+            let rate: Vec<f32> = nd.value_win
+                .iter()
+                .zip(nd.visit_cnt.iter())
                 .map(|(&w, &c)| if c == 0 { nd_rate } else { w / c as f32 })
                 .collect();
-            let action_value: Vec<f32> = multizip((rate.iter(), nd.prob.iter(), nd.visit_cnt.iter()))
-                .map(|(&r, &p, &c)| r + cpsv * p / (c + 1) as f32)
-                .collect();
+            let action_value: Vec<f32> =
+                multizip((rate.iter(), nd.prob.iter(), nd.visit_cnt.iter()))
+                    .map(|(&r, &p, &c)| r + cpsv * p / (c + 1) as f32)
+                    .collect();
             best = np::argmax(&action_value[0..nd.branch_cnt]);
 
             route.push((node_id, best));
             next_id = nd.next_id[best];
             next_move = nd.mov[best];
-            is_head_node = !self.has_next(node_id, best, b.get_move_cnt() + 1) ||
-                nd.visit_cnt[best] < EXPAND_CNT ||
-                (b.get_move_cnt() > BVCNT * 2) ||
-                (next_move == PASS && b.get_prev_move() == PASS);
+            is_head_node = !self.has_next(node_id, best, b.get_move_cnt() + 1)
+                || nd.visit_cnt[best] < EXPAND_CNT
+                || (b.get_move_cnt() > BVCNT * 2)
+                || (next_move == PASS && b.get_prev_move() == PASS);
         }
 
         let _ = b.play(next_move, false);
@@ -268,7 +287,9 @@ impl Tree {
         let (prob, _) = self.evaluate(b);
         self.root_id = self.create_node(b.info(), &prob);
         self.root_move_cnt = b.get_move_cnt();
-        unsafe { TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 }; }
+        unsafe {
+            TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 };
+        }
 
         if self.node[self.root_id].branch_cnt <= 1 {
             eprintln!("\nmove count={}:", b.get_move_cnt() + 1);
@@ -278,16 +299,20 @@ impl Tree {
 
         self.delete_node();
 
-        let mut order_ = np::argsort(&self.node[self.root_id].visit_cnt[0..self.node[self.root_id].branch_cnt], true);
+        let mut order_ = np::argsort(
+            &self.node[self.root_id].visit_cnt[0..self.node[self.root_id].branch_cnt],
+            true,
+        );
         let mut best = order_[0];
         let mut second = order_[1];
 
         let mut win_rate = self.branch_rate(&self.node[self.root_id], best);
 
-        let stand_out = self.node[self.root_id].total_cnt > 5000 &&
-            self.node[self.root_id].visit_cnt[best] > self.node[self.root_id].visit_cnt[second] * 100;
-        let almost_win = self.node[self.root_id].total_cnt > 5000 &&
-            (win_rate < 0.1 || win_rate > 0.9);
+        let stand_out = self.node[self.root_id].total_cnt > 5000
+            && self.node[self.root_id].visit_cnt[best]
+                > self.node[self.root_id].visit_cnt[second] * 100;
+        let almost_win =
+            self.node[self.root_id].total_cnt > 5000 && (win_rate < 0.1 || win_rate > 0.9);
 
         if ponder || !(stand_out || almost_win) {
             if time_ == 0.0 {
@@ -308,13 +333,20 @@ impl Tree {
                 self.search_branch(&mut b_cpy, root_id, &mut route);
                 search_idx += 1;
                 if search_idx % 64 == 0 {
-                    if (ponder && unsafe { TREE_STOP }) || duration2float(start.elapsed().unwrap()) > time_ {
-                        unsafe { TREE_STOP = false; }
+                    if (ponder && unsafe { TREE_STOP })
+                        || duration2float(start.elapsed().unwrap()) > time_
+                    {
+                        unsafe {
+                            TREE_STOP = false;
+                        }
                         break;
                     }
                 }
             }
-            order_ = np::argsort(&self.node[self.root_id].visit_cnt[0..self.node[self.root_id].branch_cnt], true);
+            order_ = np::argsort(
+                &self.node[self.root_id].visit_cnt[0..self.node[self.root_id].branch_cnt],
+                true,
+            );
             best = order_[0];
             second = order_[1];
         }
@@ -323,14 +355,20 @@ impl Tree {
         win_rate = self.branch_rate(&self.node[self.root_id], best);
 
         if clean && next_move == PASS {
-            if self.node[self.root_id].value_win[best] * self.node[self.root_id].value_win[second] > 0.0 {
+            if self.node[self.root_id].value_win[best] * self.node[self.root_id].value_win[second]
+                > 0.0
+            {
                 next_move = self.node[self.root_id].mov[second];
                 win_rate = self.branch_rate(&self.node[self.root_id], second);
             }
         }
         if !ponder {
-            eprintln!("\nmove count={}: left time={:.1}[sec] evaluated={}",
-                b.get_move_cnt() + 1, (self.left_time - time_).max(0.0), self.eval_cnt);
+            eprintln!(
+                "\nmove count={}: left time={:.1}[sec] evaluated={}",
+                b.get_move_cnt() + 1,
+                (self.left_time - time_).max(0.0),
+                self.eval_cnt
+            );
             self.print_info(self.root_id);
             self.left_time = (self.left_time - duration2float(start.elapsed().unwrap())).max(0.0);
         }
@@ -341,9 +379,8 @@ impl Tree {
     fn has_next(&self, node_id: usize, br_id: usize, move_cnt: usize) -> bool {
         let nd = self.node.get(node_id).unwrap();
         let next_id = nd.next_id[br_id];
-        next_id < usize::MAX &&
-            nd.next_hash[br_id] == self.node[next_id].hash &&
-            self.node[next_id].move_cnt == move_cnt
+        next_id < usize::MAX && nd.next_hash[br_id] == self.node[next_id].hash
+            && self.node[next_id].move_cnt == move_cnt
     }
 
     fn branch_rate(&self, nd: &Node, id: usize) -> f32 {
@@ -388,12 +425,22 @@ impl Tree {
                 break;
             }
 
-            let rate = if visit_cnt == 0 { 0.0 } else { self.branch_rate(&nd, m) * 100.0 };
+            let rate = if visit_cnt == 0 {
+                0.0
+            } else {
+                self.branch_rate(&nd, m) * 100.0
+            };
             let value = (nd.value[m] / 2.0 + 0.5) * 100.0;
 
-            eprintln!("|{:>4}|{:7}|{:5.1}|{:5.1}|{:5.1}| {}",
-                ev2str(nd.mov[m]), visit_cnt, rate, value, nd.prob[m] * 100.0,
-                self.best_sequence(nd.next_id[m], nd.mov[m]));
+            eprintln!(
+                "|{:>4}|{:7}|{:5.1}|{:5.1}|{:5.1}| {}",
+                ev2str(nd.mov[m]),
+                visit_cnt,
+                rate,
+                value,
+                nd.prob[m] * 100.0,
+                self.best_sequence(nd.next_id[m], nd.mov[m])
+            );
         }
     }
 }
