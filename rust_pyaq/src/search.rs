@@ -134,13 +134,11 @@ impl Tree {
         use stdweb::unstable::TryInto;
         let feature = &b.feature();
         let feature = unsafe { UnsafeTypedArray::new(feature) };
-        let mut array: Vec<Reference> = js! { evaluate(@{feature}) }.try_into().unwrap();
-        let first = array.remove(0);
-        let second = array.remove(0);
-        (
-            first.downcast::<TypedArray<f32>>().unwrap().to_vec(),
-            second.downcast::<TypedArray<f32>>().unwrap().to_vec(),
-        )
+        let array: Vec<Reference> = js! { evaluate(@{feature}) }.try_into().unwrap();
+        let mut iter = array
+            .into_iter()
+            .map(|e| e.downcast::<TypedArray<f32>>().unwrap().to_vec());
+        (iter.next().unwrap(), iter.next().unwrap())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -214,8 +212,9 @@ impl Tree {
         let next_move;
         let is_head_node;
         {
-            use itertools::multizip;
             // 上記変数を計算し、下記ndを解放するためのブロック
+            use itertools::multizip;
+
             let nd = self.node.get(node_id).unwrap(); // Copyを避けるためにget
             let nd_rate = if nd.total_cnt == 0 {
                 0.0
@@ -223,16 +222,14 @@ impl Tree {
                 nd.total_value / nd.total_cnt as f32
             };
             let cpsv = unsafe { TREE_CP } * (nd.total_cnt as f32).sqrt();
-            let rate: Vec<f32> = nd.value_win
+            let rate = nd.value_win
                 .iter()
                 .zip(nd.visit_cnt.iter())
-                .map(|(&w, &c)| if c == 0 { nd_rate } else { w / c as f32 })
-                .collect();
-            let action_value: Vec<f32> =
-                multizip((rate.iter(), nd.prob.iter(), nd.visit_cnt.iter()))
-                    .map(|(&r, &p, &c)| r + cpsv * p / (c + 1) as f32)
-                    .collect();
-            best = np::argmax(&action_value[0..nd.branch_cnt]);
+                .map(|(&w, &c)| if c == 0 { nd_rate } else { w / c as f32 });
+            let action_value = multizip((rate, nd.prob.iter(), nd.visit_cnt.iter()))
+                .map(|(r, &p, &c)| r + cpsv * p / (c + 1) as f32)
+                .take(nd.branch_cnt);
+            best = np::argmax(action_value);
 
             route.push((node_id, best));
             next_id = nd.next_id[best];
@@ -245,14 +242,13 @@ impl Tree {
 
         let _ = b.play(next_move, false);
 
-        let value;
-        if is_head_node {
+        let value = if is_head_node {
             if self.node[node_id].evaluated[best] {
-                value = self.node[node_id].value[best];
+                self.node[node_id].value[best]
             } else {
                 let (prob_, value_) = self.evaluate(b);
                 self.eval_cnt += 1;
-                value = -value_[0];
+                let value = -value_[0];
                 self.node[node_id].value[best] = value;
                 self.node[node_id].evaluated[best] = true;
 
@@ -267,10 +263,11 @@ impl Tree {
 
                 self.node[next_id].total_value -= self.node[node_id].value_win[best];
                 self.node[next_id].total_cnt += self.node[node_id].visit_cnt[best];
+                value
             }
         } else {
-            value = -self.search_branch(b, next_id, route);
-        }
+            -self.search_branch(b, next_id, route)
+        };
 
         let nd = self.node.get_mut(node_id).unwrap();
         nd.total_value += value;
@@ -292,28 +289,30 @@ impl Tree {
             TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 };
         }
 
-        if self.node[self.root_id].branch_cnt <= 1 {
-            eprintln!("\nmove count={}:", b.get_move_cnt() + 1);
-            self.print_info(self.root_id);
-            return (PASS, 0.5);
+        let mut best;
+        let mut second;
+        let stand_out;
+        let almost_win;
+        {
+            if self.node[self.root_id].branch_cnt <= 1 {
+                eprintln!("\nmove count={}:", b.get_move_cnt() + 1);
+                self.print_info(self.root_id);
+                return (PASS, 0.5);
+            }
+
+            self.delete_node();
+
+            let nd = self.node.get(self.root_id).unwrap();
+
+            let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
+            best = order_[0];
+            second = order_[1];
+
+            let win_rate = self.branch_rate(&nd, best);
+
+            stand_out = nd.total_cnt > 5000 && nd.visit_cnt[best] > nd.visit_cnt[second] * 100;
+            almost_win = nd.total_cnt > 5000 && (win_rate < 0.1 || win_rate > 0.9);
         }
-
-        self.delete_node();
-
-        let mut order_ = np::argsort(
-            &self.node[self.root_id].visit_cnt[0..self.node[self.root_id].branch_cnt],
-            true,
-        );
-        let mut best = order_[0];
-        let mut second = order_[1];
-
-        let mut win_rate = self.branch_rate(&self.node[self.root_id], best);
-
-        let stand_out = self.node[self.root_id].total_cnt > 5000
-            && self.node[self.root_id].visit_cnt[best]
-                > self.node[self.root_id].visit_cnt[second] * 100;
-        let almost_win =
-            self.node[self.root_id].total_cnt > 5000 && (win_rate < 0.1 || win_rate > 0.9);
 
         if ponder || !(stand_out || almost_win) {
             if time_ == 0.0 {
@@ -344,24 +343,19 @@ impl Tree {
                     }
                 }
             }
-            order_ = np::argsort(
-                &self.node[self.root_id].visit_cnt[0..self.node[self.root_id].branch_cnt],
-                true,
-            );
+            let nd = self.node.get(self.root_id).unwrap();
+            let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
             best = order_[0];
             second = order_[1];
         }
 
-        let mut next_move = self.node[self.root_id].mov[best];
-        win_rate = self.branch_rate(&self.node[self.root_id], best);
+        let nd = self.node.get(self.root_id).unwrap();
+        let mut next_move = nd.mov[best];
+        let mut win_rate = self.branch_rate(&nd, best);
 
-        if clean && next_move == PASS {
-            if self.node[self.root_id].value_win[best] * self.node[self.root_id].value_win[second]
-                > 0.0
-            {
-                next_move = self.node[self.root_id].mov[second];
-                win_rate = self.branch_rate(&self.node[self.root_id], second);
-            }
+        if clean && next_move == PASS && nd.value_win[best] * nd.value_win[second] > 0.0 {
+            next_move = nd.mov[second];
+            win_rate = self.branch_rate(&nd, second);
         }
         if !ponder {
             eprintln!(
@@ -399,7 +393,7 @@ impl Tree {
                 break;
             }
 
-            let best = np::argmax(&nd.visit_cnt[0..nd.branch_cnt]);
+            let best = np::argmax(nd.visit_cnt[0..nd.branch_cnt].iter());
             if nd.visit_cnt[best] == 0 {
                 break;
             }

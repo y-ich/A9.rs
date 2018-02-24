@@ -135,7 +135,7 @@ impl GtpClient {
             }
             "genmove" => {
                 let (mov, win_rate) = if self.quick {
-                    (rv2ev(np::argmax(&self.tree.evaluate(&self.b).0)), 0.5)
+                    (rv2ev(np::argmax(self.tree.evaluate(&self.b).0.iter())), 0.5)
                 } else {
                     self.tree.search(&self.b, 0.0, false, self.clean)
                 };

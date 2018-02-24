@@ -1,16 +1,16 @@
 //! numpyとは全く関係ありませんが、Pyaqで使われているnumpyのヘルパー関数の代わりの関数を提供します
 
-/// 配列の中の最大値のインデックスを返します。
-/// 空の配列を渡すとpanicします。
-pub fn argmax<T: PartialOrd>(array: &[T]) -> usize {
-    let mut iter = array.iter().enumerate();
-    let first = iter.next().unwrap();
-    iter.fold(first, |m, v| if v.1 > m.1 { v } else { m }).0
+/// イテレータの中の最大値のインデックスを返します。
+/// 空のイテレータを渡すとpanicします。
+pub fn argmax<T: PartialOrd, I: Iterator<Item = T>>(iter: I) -> usize {
+    let mut en = iter.enumerate();
+    let first = en.next().unwrap();
+    en.fold(first, |m, v| if v.1 > m.1 { v } else { m }).0
 }
 
 #[test]
 fn test_argmax() {
-    assert_eq!(argmax(&[0, 1, 2, 1, 0]), 2);
+    assert_eq!(argmax([0, 1, 2, 1, 0].iter()), 2);
 }
 
 /// 配列をソートした時の元のインデックスのVecを返します。
