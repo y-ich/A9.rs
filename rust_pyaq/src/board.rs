@@ -223,6 +223,12 @@ impl Board {
         dest.history = self.history.clone();
     }
 
+    pub fn play_sequence<I: Iterator<Item = usize>>(&mut self, sequence: I) {
+        for v in sequence {
+            let _ = self.play(v, false);
+        }
+    }
+
     /// 線形座標vの位置の石とその連を上げます。
     pub fn remove(&mut self, v: usize) {
         let mut v_tmp = v;

@@ -173,22 +173,15 @@ impl GtpClient {
             "undo" => {
                 let mut history = self.b.get_history().clone();
                 history.pop();
-                self.b.clear();
                 self.tree.clear();
-                for v in history {
-                    let _ = self.b.play(v, false);
-                }
+                self.b.clear();
+                self.b.play_sequence(history.into_iter());
                 send("");
             }
             "gogui-play_sequence" => {
                 let mut a = args.iter();
-                while let Some(_) = a.next() {
-                    if let Some(mov) = a.next() {
-                        let _ = self.b.play(str2ev(mov), false);
-                    } else {
-                        break;
-                    }
-                }
+                a.next();
+                self.b.play_sequence(a.step_by(2).map(|s| str2ev(&s)));
                 send("");
             }
             "showboard" => {
@@ -197,16 +190,18 @@ impl GtpClient {
             }
             "loadsgf" => {
                 use sgf::SgfCollection;
+
                 if let Some(filename) = args.get(0) {
                     if let Ok(sgf) = read_file(filename) {
                         if let Ok(collection) = SgfCollection::from_sgf(&sgf) {
-                            self.b.clear();
                             self.tree.clear();
+                            self.b.clear();
                             let mn = if let Some(mn) = args.get(1) {
                                 mn.parse::<usize>().unwrap()
                             } else {
                                 usize::max_value()
                             };
+                            // TODO - play_sequenceを使う。generatorが良さそうだけどまだnightly
                             let mut node = &collection[0];
                             let mut n = 0;
                             while node.children.len() > 0 {

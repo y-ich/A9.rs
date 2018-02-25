@@ -1,4 +1,5 @@
 #![feature(box_syntax)]
+#![feature(iterator_step_by)]
 #![feature(proc_macro)] // stdwebが使う
 extern crate itertools;
 #[macro_use]
