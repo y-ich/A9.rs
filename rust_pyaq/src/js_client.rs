@@ -9,7 +9,7 @@ pub struct JsClient {
 
 impl JsClient {
     pub fn new() -> Self {
-        let mut tree = Tree::new("frozen_model.pb");
+        let mut tree = Tree::new();
         tree.set_time(0.0, 1.0);
         Self {
             b: Board::new(),

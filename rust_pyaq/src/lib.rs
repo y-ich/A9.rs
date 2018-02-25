@@ -1,6 +1,7 @@
 #![feature(box_syntax)]
 #![feature(iterator_step_by)]
 #![feature(proc_macro)] // stdwebが使う
+
 extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
@@ -27,14 +28,18 @@ pub mod gtp;
 mod js_client;
 
 #[cfg(target_arch = "wasm32")]
+use stdweb::js_export;
+
+#[cfg(target_arch = "wasm32")]
 #[js_export]
-pub fn think(pv: Vec<(usize)>, byoyomi: f32) -> (usize, f32) {
-    use std::f32;
+pub fn think(pv: Vec<(usize)>, byoyomi: f64) -> (usize, f64) {
+    use std::f64;
 
     let mut client = js_client::JsClient::new();
     if client.load_pv(&pv).is_ok() {
-        client.best_move(byoyomi)
+        let result = client.best_move(byoyomi as f32);
+        (result.0, result.1 as f64)
     } else {
-        (usize::max_value(), f32::NAN)
+        (usize::max_value(), f64::NAN)
     }
 }

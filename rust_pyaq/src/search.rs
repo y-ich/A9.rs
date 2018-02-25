@@ -88,7 +88,8 @@ pub struct Tree {
 }
 
 impl Tree {
-    pub fn new(_ckpt_path: &str) -> Self {
+    #[cfg(target_arch = "wasm32")]
+    pub fn new() -> Self {
         Self {
             main_time: 0.0,
             byoyomi: 1.0,
@@ -99,8 +100,22 @@ impl Tree {
             root_move_cnt: 0,
             node_hashs: HashMap::new(),
             eval_cnt: 0,
-            #[cfg(not(target_arch = "wasm32"))]
-            nn: NeuralNetwork::new(_ckpt_path),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new(ckpt_path: &str) -> Self {
+        Self {
+            main_time: 0.0,
+            byoyomi: 1.0,
+            left_time: 0.0,
+            node: box [Node::new(); MAX_NODE_CNT],
+            node_cnt: 0,
+            root_id: 0,
+            root_move_cnt: 0,
+            node_hashs: HashMap::new(),
+            eval_cnt: 0,
+            nn: NeuralNetwork::new(ckpt_path),
         }
     }
 
