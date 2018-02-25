@@ -99,7 +99,7 @@ pub enum Color {
 }
 
 impl Color {
-    fn opponent(&self) -> Self {
+    pub fn opponent(&self) -> Self {
         match *self {
             Color::White => Color::Black,
             Color::Black => Color::White,

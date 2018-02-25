@@ -188,13 +188,12 @@ impl GtpClient {
             "loadsgf" => {
                 if let Some(filename) = args.get(0) {
                     if let Ok(sgf) = read_file(filename) {
-                        if let Ok(collection) = SgfCollection::from_sgf(&sgf) {
-                            let mn = if let Some(mn) = args.get(1) {
-                                mn.parse::<usize>().unwrap()
-                            } else {
-                                usize::max_value()
-                            };
-                            self.load_collection(&collection, mn);
+                        let mn = if let Some(mn) = args.get(1) {
+                            mn.parse::<usize>().unwrap()
+                        } else {
+                            usize::max_value()
+                        };
+                        if self.load_sgf(&sgf, mn).is_ok() {
                             send("");
                         } else {
                             println!("?invalid sgf\n");
@@ -218,7 +217,7 @@ impl GtpClient {
     }
 
     /// sgfテキストをロードして次の手番を返します。
-    pub fn load_sgf(&mut self, sgf: &str, mn: usize) -> Result<Color, &'static str> {
+    fn load_sgf(&mut self, sgf: &str, mn: usize) -> Result<Color, &'static str> {
         if let Ok(collection) = SgfCollection::from_sgf(&sgf) {
             Ok(self.load_collection(&collection, mn))
         } else {

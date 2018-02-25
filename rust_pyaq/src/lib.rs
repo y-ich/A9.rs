@@ -5,7 +5,8 @@ extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
 extern crate rand;
-extern crate sgf;
+#[cfg(not(target_arch = "wasm32"))]
+extern crate sgf; // libcを使うのでwasm32では使わないようにする
 #[cfg(target_arch = "wasm32")]
 #[macro_use]
 extern crate stdweb;
@@ -20,18 +21,20 @@ pub mod board;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod neural_network;
 pub mod search;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod gtp;
+#[cfg(target_arch = "wasm32")]
+mod js_client;
 
 #[cfg(target_arch = "wasm32")]
 #[js_export]
-pub fn think(sgf: &str, byoyomi: f32) -> ((u8, u8), f32) {
+pub fn think(pv: Vec<(usize)>, byoyomi: f32) -> (usize, f32) {
     use std::f32;
 
-    let mut gtp = gtp::GtpClient::new(0.0, byoyomi, false, false);
-    if gtp.load_sgf(sgf, usize::max_value()).is_ok() {
-        let (mov, win_rate) = gtp.best_move();
-        (board::ev2xy(mov), win_rate)
+    let mut client = js_client::JsClient::new();
+    if client.load_pv(&pv).is_ok() {
+        client.best_move(byoyomi)
     } else {
-        ((u8::max_value(), u8::max_value()), f32::NAN)
+        (usize::max_value(), f32::NAN)
     }
 }
