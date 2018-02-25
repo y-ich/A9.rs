@@ -21,3 +21,17 @@ pub mod board;
 pub mod neural_network;
 pub mod search;
 pub mod gtp;
+
+#[cfg(target_arch = "wasm32")]
+#[js_export]
+pub fn think(sgf: &str, byoyomi: f32) -> ((u8, u8), f32) {
+    use std::f32;
+
+    let mut gtp = gtp::GtpClient::new(0.0, byoyomi, false, false);
+    if gtp.load_sgf(sgf, usize::max_value()).is_ok() {
+        let (mov, win_rate) = gtp.best_move();
+        (board::ev2xy(mov), win_rate)
+    } else {
+        ((u8::max_value(), u8::max_value()), f32::NAN)
+    }
+}

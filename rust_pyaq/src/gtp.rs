@@ -1,4 +1,5 @@
 use std::io;
+use sgf::SgfCollection;
 use numpy as np;
 use constants::*;
 use board::*;
@@ -48,12 +49,12 @@ fn parse(line: &str) -> (Option<&str>, Vec<&str>) {
     (command, args.collect())
 }
 
-fn move2xy(mov: &str) -> (usize, usize) {
-    const OFFSET: usize = 'a' as usize - 1;
+fn move2xy(mov: &str) -> (u8, u8) {
+    const OFFSET: u8 = 'a' as u8 - 1;
     let mut chars = mov.chars();
     let first = chars.next().unwrap();
     let second = chars.next().unwrap();
-    (first as usize - OFFSET, second as usize - OFFSET)
+    (first as u8 - OFFSET, second as u8 - OFFSET)
 }
 
 fn read_file(name: &str) -> io::Result<String> {
@@ -154,11 +155,7 @@ impl GtpClient {
                 send("");
             }
             "genmove" => {
-                let (mov, win_rate) = if self.quick {
-                    (rv2ev(np::argmax(self.tree.evaluate(&self.b).0.iter())), 0.5)
-                } else {
-                    self.tree.search(&self.b, 0.0, false, self.clean)
-                };
+                let (mov, win_rate) = self.best_move();
                 if win_rate < 0.1 {
                     send("resign");
                 } else {
@@ -189,32 +186,15 @@ impl GtpClient {
                 send("");
             }
             "loadsgf" => {
-                use sgf::SgfCollection;
-
                 if let Some(filename) = args.get(0) {
                     if let Ok(sgf) = read_file(filename) {
                         if let Ok(collection) = SgfCollection::from_sgf(&sgf) {
-                            self.tree.clear();
-                            self.b.clear();
                             let mn = if let Some(mn) = args.get(1) {
                                 mn.parse::<usize>().unwrap()
                             } else {
                                 usize::max_value()
                             };
-                            // TODO - play_sequenceを使う。generatorが良さそうだけどまだnightly
-                            let mut node = &collection[0];
-                            let mut n = 0;
-                            while node.children.len() > 0 {
-                                if n >= mn {
-                                    break;
-                                }
-                                node = &node.children[0];
-                                if let Ok(point) = node.get_point("B").or(node.get_point("W")) {
-                                    let (x, y) = move2xy(&point);
-                                    let _ = self.b.play(xy2ev(x, y), false);
-                                }
-                                n += 1;
-                            }
+                            self.load_collection(&collection, mn);
                             send("");
                         } else {
                             println!("?invalid sgf\n");
@@ -235,5 +215,51 @@ impl GtpClient {
             }
         }
         return true;
+    }
+
+    /// sgfテキストをロードして次の手番を返します。
+    pub fn load_sgf(&mut self, sgf: &str, mn: usize) -> Result<Color, &'static str> {
+        if let Ok(collection) = SgfCollection::from_sgf(&sgf) {
+            Ok(self.load_collection(&collection, mn))
+        } else {
+            Err("invalid sgf")
+        }
+    }
+
+    fn load_collection(&mut self, collection: &SgfCollection, mn: usize) -> Color {
+        self.tree.clear();
+        self.b.clear();
+        // TODO - play_sequenceを使う。generatorが良さそうだけどまだnightly
+        let mut node = &collection[0];
+        let mut n = 0;
+        let mut color = Color::Black;
+
+        while node.children.len() > 0 {
+            if n >= mn {
+                break;
+            }
+            node = &node.children[0];
+            if let Ok(point) = node.get_point("B").or(node.get_point("W")) {
+                let (x, y) = move2xy(&point);
+                let _ = self.b.play(xy2ev(x, y), false);
+                n += 1;
+            }
+            // TODO - get_pointの二重コール避けたい。でもきれいに書けない。
+            if node.get_point("B").is_ok() {
+                color = Color::White;
+            } else if node.get_point("W").is_ok() {
+                color = Color::Black;
+            }
+        }
+        color
+    }
+
+    /// 現局面の探索最善手と勝率を返します。手番はself.b.turnです。
+    pub fn best_move(&mut self) -> (usize, f32) {
+        if self.quick {
+            (rv2ev(np::argmax(self.tree.evaluate(&self.b).0.iter())), 0.5)
+        } else {
+            self.tree.search(&self.b, 0.0, false, self.clean)
+        }
     }
 }

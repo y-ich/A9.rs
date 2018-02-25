@@ -6,20 +6,21 @@ use stone_group::StoneGroup;
 
 const KEEP_PREV_CNT: usize = 2;
 const FEATURE_CNT: usize = KEEP_PREV_CNT * 2 + 3; // 7
-const X_LABELS: [char; 19] = [
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'
+const X_LABELS: [char; 20] = [
+    '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
+    'T',
 ];
 
 /// 拡張碁盤の線形座標をxy座標に変換します。
 #[inline]
-fn ev2xy(ev: usize) -> (usize, usize) {
-    (ev % EBSIZE, ev / EBSIZE)
+pub fn ev2xy(ev: usize) -> (u8, u8) {
+    ((ev % EBSIZE) as u8, (ev / EBSIZE) as u8)
 }
 
 /// 碁盤のxy座標を拡張碁盤の線形座標に変換します。
 #[inline]
-pub fn xy2ev(x: usize, y: usize) -> usize {
-    y * EBSIZE + x
+pub fn xy2ev(x: u8, y: u8) -> usize {
+    y as usize * EBSIZE + x as usize
 }
 
 /// 碁盤の線形座標を拡張碁盤の線形座標に変換します。
@@ -49,7 +50,7 @@ pub fn ev2str(ev: usize) -> String {
     } else {
         let (x, y) = ev2xy(ev);
         let mut s = y.to_string();
-        s.insert(0, X_LABELS[x - 1]);
+        s.insert(0, X_LABELS[x as usize]);
         s
     }
 }
@@ -62,8 +63,8 @@ pub fn str2ev(v: &str) -> usize {
     } else {
         let mut chars = v_str.chars();
         let first = chars.next().unwrap();
-        let x = X_LABELS.iter().position(|&e| e == first).unwrap() + 1;
-        let y = chars.collect::<String>().parse::<usize>().unwrap();
+        let x = X_LABELS.iter().position(|&e| e == first).unwrap() as u8;
+        let y = chars.collect::<String>().parse::<u8>().unwrap();
         xy2ev(x, y)
     }
 }
@@ -183,8 +184,8 @@ impl Board {
     }
 
     pub fn clear(&mut self) {
-        for x in 1..BSIZE + 1 {
-            for y in 1..BSIZE + 1 {
+        for x in 1..(BSIZE + 1) as u8 {
+            for y in 1..(BSIZE + 1) as u8 {
                 self.state[xy2ev(x, y)] = Intersection::Empty;
             }
         }
@@ -469,15 +470,15 @@ impl Board {
     pub fn showboard(&self) {
         fn print_xlabel() {
             let mut line_str = "  ".to_string();
-            for x in 0..BSIZE {
+            for x in 1..BSIZE + 1 {
                 line_str.push_str(&format!(" {} ", X_LABELS[x]));
             }
             eprintln!("{}", line_str);
         }
         print_xlabel();
-        for y in (1..BSIZE + 1).rev() {
+        for y in (1..(BSIZE + 1) as u8).rev() {
             let mut line_str = format!("{:>2}", y);
-            for x in 1..BSIZE + 1 {
+            for x in 1..(BSIZE + 1) as u8 {
                 let v = xy2ev(x, y);
                 let x_str = match self.state[v] {
                     Intersection::Stone(c) => {
