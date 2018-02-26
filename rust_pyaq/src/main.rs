@@ -1,9 +1,11 @@
-#![feature(box_syntax)]
+#![feature(iterator_step_by)]
 /// rust_pyaq: Pyaq(https://github.com/ymgaq/Pyaq)のRustへの移植コード
 /// 作者: 市川雄二
 /// ライセンス: MIT
 extern crate getopts;
+extern crate sgf;
 extern crate rust_pyaq_lib;
+pub mod gtp;
 
 use rust_pyaq_lib as rpl;
 use rpl::*;

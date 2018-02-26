@@ -1,5 +1,4 @@
 #![feature(box_syntax)]
-#![feature(iterator_step_by)]
 #![feature(proc_macro)] // stdwebが使う
 
 extern crate itertools;
@@ -7,8 +6,6 @@ extern crate itertools;
 extern crate lazy_static;
 extern crate rand;
 
-#[cfg(not(target_arch = "wasm32"))]
-extern crate sgf; // libcを使うのでwasm32では使わないようにする
 #[cfg(not(target_arch = "wasm32"))]
 extern crate tensorflow;
 
@@ -30,8 +27,6 @@ pub mod search;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod neural_network;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod gtp;
 
 #[cfg(target_arch = "wasm32")]
 mod js_client;
