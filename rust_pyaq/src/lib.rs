@@ -1,6 +1,8 @@
 #![feature(box_syntax)]
+#![feature(test)]
 #![feature(proc_macro)] // stdwebが使う
 
+extern crate test;
 extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
