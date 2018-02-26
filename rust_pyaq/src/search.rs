@@ -457,3 +457,25 @@ impl Tree {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use test::Bencher;
+    use board::Board;
+    use super::Tree;
+
+    #[bench]
+    fn bench_search_branch(b: &mut Bencher) {
+        let mut board = Board::new();
+        let mut tree = Tree::new("frozen_model.pb");
+        let (prob, _) = tree.evaluate(&board);
+        b.iter(|| {
+            board.clear();
+            tree.clear();
+            tree.root_id = tree.create_node(board.info(), &prob);
+            let mut route = Vec::new();
+            let root_id = tree.root_id;
+            tree.search_branch(&mut board, root_id, &mut route);
+        });
+    }
+}
