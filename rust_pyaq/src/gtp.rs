@@ -6,6 +6,7 @@ use intersection::*;
 use coord_convert::*;
 use board::*;
 use search::Tree;
+use neural_network::NeuralNetwork;
 
 fn response_list_commands() {
     const CMD_LIST: [&str; 16] = [
@@ -72,15 +73,13 @@ fn read_file(name: &str) -> io::Result<String> {
 /// GTPコマンドを待ち受け、実行するワーカーです。
 pub struct GtpClient {
     b: Board,
-    tree: Tree,
+    tree: Tree<NeuralNetwork>,
     quick: bool,
     clean: bool,
 }
 
 impl GtpClient {
     pub fn new(main_time: f32, byoyomi: f32, quick: bool, clean: bool) -> Self {
-        use neural_network::NeuralNetwork;
-
         let mut tree = Tree::new(NeuralNetwork::new("frozen_model.pb"));
         tree.set_time(main_time, byoyomi);
         GtpClient {
@@ -259,8 +258,12 @@ impl GtpClient {
 
     /// 現局面の探索最善手と勝率を返します。手番はself.b.turnです。
     pub fn best_move(&mut self) -> (usize, f32) {
+        use rust_pyaq_lib::search::Evaluate;
         if self.quick {
-            (rv2ev(np::argmax(self.tree.evaluate(&self.b).0.iter())), 0.5)
+            (
+                rv2ev(np::argmax(self.tree.nn.evaluate(&self.b).0.iter())),
+                0.5,
+            )
         } else {
             self.tree.search(&self.b, 0.0, false, self.clean)
         }

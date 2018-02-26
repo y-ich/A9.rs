@@ -1,11 +1,16 @@
+#![feature(test)]
 #![feature(iterator_step_by)]
-/// rust_pyaq: Pyaq(https://github.com/ymgaq/Pyaq)のRustへの移植コード
-/// 作者: 市川雄二
-/// ライセンス: MIT
 extern crate getopts;
 extern crate rust_pyaq_lib;
 extern crate sgf;
-pub mod gtp;
+extern crate tensorflow;
+extern crate test;
+/// rust_pyaq: Pyaq(https://github.com/ymgaq/Pyaq)のRustへの移植コード
+/// 作者: 市川雄二
+/// ライセンス: MIT
+
+mod neural_network;
+mod gtp;
 
 use rust_pyaq_lib as rpl;
 use rpl::*;

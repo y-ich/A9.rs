@@ -1,14 +1,11 @@
 use std::collections::HashMap;
 use std::time;
+#[cfg(feature = "ponder")]
 use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(not(target_arch = "wasm32"))]
-use tensorflow as tf;
 use numpy as np;
 use constants::*;
 use coord_convert::*;
 use board::*;
-#[cfg(not(target_arch = "wasm32"))]
-use neural_network::NeuralNetwork;
 
 const MAX_NODE_CNT: usize = 16384; // 2 ^ 14
 const EXPAND_CNT: usize = 8;
@@ -17,96 +14,35 @@ fn duration2float(d: time::Duration) -> f32 {
     d.as_secs() as f32 + d.subsec_nanos() as f32 / 1000_000_000.0
 }
 
-/// MCTSの各ノードです。
-#[derive(Clone, Copy)] // 配列の初期化で楽するためにCopyにした
-struct Node {
-    // 各配列のBVCNT番目の要素はPASSに対応する着手
-    mov: [usize; BVCNT + 1],
-    prob: [f32; BVCNT + 1],
-    value: [f32; BVCNT + 1],
-    value_win: [f32; BVCNT + 1],
-    visit_cnt: [usize; BVCNT + 1],
-    next_id: [usize; BVCNT + 1],
-    next_hash: [u64; BVCNT + 1],
-    evaluated: [bool; BVCNT + 1],
-    branch_cnt: usize,
-    total_value: f32,
-    total_cnt: usize,
-    hash: u64,
-    move_cnt: usize, // TODO - Option<usize>のほうがいいか
+pub trait Evaluate {
+    fn evaluate(&mut self, board: &Board) -> (Vec<f32>, Vec<f32>);
 }
 
-impl Node {
-    pub fn new() -> Self {
-        use std::mem::uninitialized;
-        let mut node: Self = unsafe { uninitialized() };
-        node.init_branch();
-        node.clear();
-        node
-    }
-
-    pub fn init_branch(&mut self) {
-        use utils::fill;
-
-        fill(&mut self.mov, VNULL);
-        fill(&mut self.prob, 0.0);
-        fill(&mut self.value, 0.0);
-        fill(&mut self.value_win, 0.0);
-        fill(&mut self.visit_cnt, 0);
-        fill(&mut self.next_id, usize::max_value());
-        fill(&mut self.next_hash, 0);
-        fill(&mut self.evaluated, false);
-    }
-
-    pub fn clear(&mut self) {
-        self.branch_cnt = 0;
-        self.total_value = 0.0;
-        self.total_cnt = 0;
-        self.hash = 0;
-        self.move_cnt = usize::max_value();
-    }
-}
-
-/// ポンダーを実装するためのフラグ。未使用。
+// TODO - ponderは用意だけでまだ未実装。
+#[cfg(feature = "ponder")]
 lazy_static! {
     static ref TREE_STOP: AtomicBool = AtomicBool::new(false);
 }
+
 /// UCB1のCp関連の係数？
 static mut TREE_CP: f32 = 2.0;
 
 /// MCTSを実行するワーカー構造体です。
-pub struct Tree {
+pub struct Tree<T: Evaluate> {
     main_time: f32,
     byoyomi: f32,
     left_time: f32,
     node: Box<[Node; MAX_NODE_CNT]>,
     node_cnt: usize,
-    root_id: usize,
+    pub root_id: usize, // ベンチマークのためにpubに
     root_move_cnt: usize,
     node_hashs: HashMap<u64, usize>,
     eval_cnt: usize,
-    #[cfg(not(target_arch = "wasm32"))]
-    nn: NeuralNetwork,
+    pub nn: T,
 }
 
-impl Tree {
-    #[cfg(target_arch = "wasm32")]
-    pub fn new() -> Self {
-        Self {
-            main_time: 0.0,
-            byoyomi: 1.0,
-            left_time: 0.0,
-            node: box [Node::new(); MAX_NODE_CNT],
-            node_cnt: 0,
-            root_id: 0,
-            root_move_cnt: 0,
-            node_hashs: HashMap::new(),
-            eval_cnt: 0,
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn new(nn: NeuralNetwork) -> Self {
+impl<T: Evaluate> Tree<T> {
+    pub fn new(nn: T) -> Self {
         Self {
             main_time: 0.0,
             byoyomi: 1.0,
@@ -141,30 +77,8 @@ impl Tree {
         self.root_move_cnt = 0;
         self.node_hashs.clear();
         self.eval_cnt = 0;
+        #[cfg(feature = "ponder")]
         TREE_STOP.store(false, Ordering::Relaxed);
-    }
-
-    /// ニューラルネットワークを評価します。
-    #[cfg(target_arch = "wasm32")]
-    pub fn evaluate(&mut self, b: &Board) -> (Vec<f32>, Vec<f32>) {
-        use stdweb::{Reference, UnsafeTypedArray};
-        use stdweb::web::TypedArray;
-        use stdweb::unstable::TryInto;
-        let mut features = [0.0; BVCNT * FEATURE_CNT];
-        b.put_features(&mut features);
-        let features = unsafe { UnsafeTypedArray::new(&features) };
-        let array: Vec<Reference> = js! { evaluate(@{features}) }.try_into().unwrap();
-        let mut iter = array
-            .into_iter()
-            .map(|e| e.downcast::<TypedArray<f32>>().unwrap().to_vec());
-        (iter.next().unwrap(), iter.next().unwrap())
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn evaluate(&mut self, b: &Board) -> (tf::Tensor<f32>, tf::Tensor<f32>) {
-        let mut features = tf::Tensor::new(&[BVCNT as u64, FEATURE_CNT as u64]);
-        b.put_features(&mut features);
-        self.nn.evaluate(&features).unwrap()
     }
 
     /// 不要なノード(現局面より手数が少ないノード)を削除します。
@@ -181,7 +95,8 @@ impl Tree {
         }
     }
 
-    fn create_node(&mut self, b_info: (u64, usize, Vec<usize>), prob: &[f32]) -> usize {
+    pub fn create_node(&mut self, b_info: (u64, usize, Vec<usize>), prob: &[f32]) -> usize {
+        // ベンチマークのためにpubに
         let hs = b_info.0;
 
         if self.node_hashs.contains_key(&hs) && self.node[self.node_hashs[&hs]].hash == hs
@@ -223,12 +138,13 @@ impl Tree {
     }
 
     /// node_idのノードの先を探索し、ValueNetworkの値を返します。
-    fn search_branch(
+    pub fn search_branch(
         &mut self,
         b: &mut Board,
         node_id: usize,
         route: &mut Vec<(usize, usize)>,
     ) -> f32 {
+        // ベンチマークのためにpubに
         let best;
         let next_id;
         let next_move;
@@ -267,7 +183,7 @@ impl Tree {
             if self.node[node_id].evaluated[best] {
                 self.node[node_id].value[best]
             } else {
-                let (prob_, value_) = self.evaluate(b);
+                let (prob_, value_) = self.nn.evaluate(b);
                 self.eval_cnt += 1;
                 let value = -value_[0];
                 {
@@ -309,7 +225,7 @@ impl Tree {
     pub fn search(&mut self, b: &Board, time_: f32, ponder: bool, clean: bool) -> (usize, f32) {
         let mut time_ = time_;
         let start = time::SystemTime::now();
-        let (prob, _) = self.evaluate(b);
+        let (prob, _) = self.nn.evaluate(b);
         self.root_id = self.create_node(b.info(), &prob);
         self.root_move_cnt = b.get_move_cnt();
         unsafe {
@@ -350,6 +266,7 @@ impl Tree {
                 }
             }
             // search
+            #[cfg(feature = "ponder")]
             let mut search_idx = 1;
             self.eval_cnt = 0;
             let mut b_cpy = Board::new();
@@ -358,12 +275,21 @@ impl Tree {
                 let mut route = Vec::new();
                 let root_id = self.root_id;
                 self.search_branch(&mut b_cpy, root_id, &mut route);
-                search_idx += 1;
-                if search_idx % 64 == 0 && (ponder && TREE_STOP.load(Ordering::Relaxed))
-                    || duration2float(start.elapsed().unwrap()) > time_
+                #[cfg(feature = "ponder")]
                 {
-                    TREE_STOP.store(false, Ordering::Relaxed);
-                    break;
+                    search_idx += 1;
+                    if ponder && search_idx % 64 == 0 && TREE_STOP.load(Ordering::Relaxed)
+                        || duration2float(start.elapsed().unwrap()) > time_
+                    {
+                        TREE_STOP.store(false, Ordering::Relaxed);
+                        break;
+                    }
+                }
+                #[cfg(not(feature = "ponder"))]
+                {
+                    if duration2float(start.elapsed().unwrap()) > time_ {
+                        break;
+                    }
                 }
             }
             let nd = &self.node[self.root_id];
@@ -463,26 +389,52 @@ impl Tree {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use test::Bencher;
+/// MCTSの各ノードです。
+#[derive(Clone, Copy)] // 配列の初期化で楽するためにCopyにした
+struct Node {
+    // 各配列のBVCNT番目の要素はPASSに対応する着手
+    mov: [usize; BVCNT + 1],
+    prob: [f32; BVCNT + 1],
+    value: [f32; BVCNT + 1],
+    value_win: [f32; BVCNT + 1],
+    visit_cnt: [usize; BVCNT + 1],
+    next_id: [usize; BVCNT + 1],
+    next_hash: [u64; BVCNT + 1],
+    evaluated: [bool; BVCNT + 1],
+    branch_cnt: usize,
+    total_value: f32,
+    total_cnt: usize,
+    hash: u64,
+    move_cnt: usize, // TODO - Option<usize>のほうがいいか
+}
 
-    #[bench]
-    fn bench_search_branch(b: &mut Bencher) {
-        use board::Board;
-        use neural_network::NeuralNetwork;
-        use super::Tree;
+impl Node {
+    pub fn new() -> Self {
+        use std::mem::uninitialized;
+        let mut node: Self = unsafe { uninitialized() };
+        node.init_branch();
+        node.clear();
+        node
+    }
 
-        let mut board = Board::new();
-        let mut tree = Tree::new(NeuralNetwork::new("frozen_model.pb"));
-        let (prob, _) = tree.evaluate(&board);
-        b.iter(|| {
-            board.clear();
-            tree.clear();
-            tree.root_id = tree.create_node(board.info(), &prob);
-            let mut route = Vec::new();
-            let root_id = tree.root_id;
-            tree.search_branch(&mut board, root_id, &mut route);
-        });
+    pub fn init_branch(&mut self) {
+        use utils::fill;
+
+        fill(&mut self.mov, VNULL);
+        fill(&mut self.prob, 0.0);
+        fill(&mut self.value, 0.0);
+        fill(&mut self.value_win, 0.0);
+        fill(&mut self.visit_cnt, 0);
+        fill(&mut self.next_id, usize::max_value());
+        fill(&mut self.next_hash, 0);
+        fill(&mut self.evaluated, false);
+    }
+
+    pub fn clear(&mut self) {
+        self.branch_cnt = 0;
+        self.total_value = 0.0;
+        self.total_cnt = 0;
+        self.hash = 0;
+        self.move_cnt = usize::max_value();
     }
 }
