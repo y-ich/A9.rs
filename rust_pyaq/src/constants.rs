@@ -17,6 +17,12 @@ pub const EBVCNT: usize = EBSIZE * EBSIZE;
 // TODO - 着手のために列挙型を作ったほうが関数のシグニチャは読みやすい。
 pub const PASS: usize = EBVCNT;
 
-/// 未使用の線形座標です。
+/// 線形座標のプレースホルダーの未使用を示す値です。
 // TODO - 該当する場所にOption<usize>を使ったほうが関数のシグニチャは読みやすい。
 pub const VNULL: usize = EBVCNT + 1;
+
+/// NNへの入力に関する履歴の深さです。
+pub const KEEP_PREV_CNT: usize = 2;
+
+/// NNへの入力フィーチャーの数です。
+pub const FEATURE_CNT: usize = KEEP_PREV_CNT * 2 + 3; // 7

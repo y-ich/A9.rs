@@ -2,6 +2,8 @@ use std::io;
 use sgf::SgfCollection;
 use numpy as np;
 use constants::*;
+use intersection::*;
+use coord_convert::*;
 use board::*;
 use search::Tree;
 
@@ -77,7 +79,9 @@ pub struct GtpClient {
 
 impl GtpClient {
     pub fn new(main_time: f32, byoyomi: f32, quick: bool, clean: bool) -> Self {
-        let mut tree = Tree::new("frozen_model.pb");
+        use neural_network::NeuralNetwork;
+
+        let mut tree = Tree::new(NeuralNetwork::new("frozen_model.pb"));
         tree.set_time(main_time, byoyomi);
         GtpClient {
             b: Board::new(),

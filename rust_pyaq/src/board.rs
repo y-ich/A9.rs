@@ -1,73 +1,8 @@
 use std::hash::{Hash, Hasher};
-#[cfg(not(target_arch = "wasm32"))]
-use tensorflow as tf;
 use constants::*;
+use intersection::*;
+use coord_convert::*;
 use stone_group::StoneGroup;
-
-const KEEP_PREV_CNT: usize = 2;
-const FEATURE_CNT: usize = KEEP_PREV_CNT * 2 + 3; // 7
-const X_LABELS: [char; 20] = [
-    '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
-    'T',
-];
-
-/// 拡張碁盤の線形座標をxy座標に変換します。
-#[inline]
-pub fn ev2xy(ev: usize) -> (u8, u8) {
-    ((ev % EBSIZE) as u8, (ev / EBSIZE) as u8)
-}
-
-/// 碁盤のxy座標を拡張碁盤の線形座標に変換します。
-#[inline]
-pub fn xy2ev(x: u8, y: u8) -> usize {
-    y as usize * EBSIZE + x as usize
-}
-
-/// 碁盤の線形座標を拡張碁盤の線形座標に変換します。
-#[inline]
-pub fn rv2ev(rv: usize) -> usize {
-    if rv == BVCNT {
-        PASS
-    } else {
-        rv % BSIZE + 1 + (rv / BSIZE + 1) * EBSIZE
-    }
-}
-
-/// 拡張碁盤の線形座標を碁盤の線形座標に変換します。
-#[inline]
-fn ev2rv(ev: usize) -> usize {
-    if ev == PASS {
-        BVCNT
-    } else {
-        ev % EBSIZE - 1 + (ev / EBSIZE - 1) * BSIZE
-    }
-}
-
-/// 拡張碁盤の線形座標を碁盤の座標の文字表現に変換します。
-pub fn ev2str(ev: usize) -> String {
-    if ev >= PASS {
-        "pass".to_string()
-    } else {
-        let (x, y) = ev2xy(ev);
-        let mut s = y.to_string();
-        s.insert(0, X_LABELS[x as usize]);
-        s
-    }
-}
-
-/// 碁盤の座標の文字表現を拡張碁盤の線形座標に変換します。
-pub fn str2ev(v: &str) -> usize {
-    let v_str = v.to_uppercase();
-    if v_str == "PASS" || v_str == "RESIGN" {
-        PASS
-    } else {
-        let mut chars = v_str.chars();
-        let first = chars.next().unwrap();
-        let x = X_LABELS.iter().position(|&e| e == first).unwrap() as u8;
-        let y = chars.collect::<String>().parse::<u8>().unwrap();
-        xy2ev(x, y)
-    }
-}
 
 /// 拡張碁盤の線形座標vの点の隣接点の線形座標の配列を返します。
 #[inline]
@@ -78,7 +13,7 @@ fn neighbors(v: usize) -> [usize; 4] {
 /// 拡張碁盤の線形座標vの点の斜め隣接点の線形座標の配列を返します。
 fn diagonals(v: usize) -> [usize; 4] {
     [
-        v + EBSIZE - 1,
+        v + EBSIZE + 1,
         v + EBSIZE - 1,
         v - EBSIZE - 1,
         v - EBSIZE + 1,
@@ -89,41 +24,6 @@ fn diagonals(v: usize) -> [usize; 4] {
 pub enum Error {
     Illegal,
     FillEye,
-}
-
-/// 石の色や手番を表す列挙型です。
-#[derive(Clone, Copy, PartialEq, Hash)]
-pub enum Color {
-    White = 0,
-    Black = 1,
-}
-
-impl Color {
-    pub fn opponent(&self) -> Self {
-        match *self {
-            Color::White => Color::Black,
-            Color::Black => Color::White,
-        }
-    }
-}
-
-// 交点の状態を表す列挙型です。
-#[derive(Clone, Copy, PartialEq, Hash)]
-enum Intersection {
-    Stone(Color),
-    Empty,
-    Exterior, // 盤の外
-}
-
-impl Intersection {
-    #[inline]
-    fn to_usize(&self) -> usize {
-        match *self {
-            Intersection::Stone(c) => c as usize,
-            Intersection::Empty => 2,
-            Intersection::Exterior => 3,
-        }
-    }
 }
 
 /// 盤上の局面を表し、操作するための構造体です。
@@ -502,22 +402,8 @@ impl Board {
         eprintln!("");
     }
 
-    /// ニューラルネットワークへの入力を返します。
-    #[cfg(target_arch = "wasm32")]
-    pub fn feature(&self) -> [f32; BVCNT * FEATURE_CNT] {
-        let mut feature = [0.0; BVCNT * FEATURE_CNT];
-        self._feature(&mut feature);
-        feature
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn feature(&self) -> tf::Tensor<f32> {
-        let mut feature = tf::Tensor::new(&[BVCNT as u64, FEATURE_CNT as u64]);
-        self._feature(&mut feature);
-        feature
-    }
-
-    fn _feature(&self, feature_: &mut [f32]) {
+    /// 与えられたsliceにニューラルネットワークへの入力を代入します。
+    pub fn put_features(&self, feature_: &mut [f32]) {
         #[inline]
         fn index(p: usize, f: usize) -> usize {
             p * FEATURE_CNT + f

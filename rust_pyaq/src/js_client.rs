@@ -1,3 +1,4 @@
+use intersection::*;
 use board::*;
 use search::Tree;
 

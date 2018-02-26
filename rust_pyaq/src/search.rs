@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tensorflow as tf;
 use numpy as np;
 use constants::*;
+use coord_convert::*;
 use board::*;
 #[cfg(not(target_arch = "wasm32"))]
 use neural_network::NeuralNetwork;
@@ -84,7 +85,8 @@ pub struct Tree {
     root_move_cnt: usize,
     node_hashs: HashMap<u64, usize>,
     eval_cnt: usize,
-    #[cfg(not(target_arch = "wasm32"))] nn: NeuralNetwork,
+    #[cfg(not(target_arch = "wasm32"))]
+    nn: NeuralNetwork,
 }
 
 impl Tree {
@@ -104,7 +106,7 @@ impl Tree {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn new(ckpt_path: &str) -> Self {
+    pub fn new(nn: NeuralNetwork) -> Self {
         Self {
             main_time: 0.0,
             byoyomi: 1.0,
@@ -115,7 +117,7 @@ impl Tree {
             root_move_cnt: 0,
             node_hashs: HashMap::new(),
             eval_cnt: 0,
-            nn: NeuralNetwork::new(ckpt_path),
+            nn: nn,
         }
     }
 
@@ -148,9 +150,10 @@ impl Tree {
         use stdweb::{Reference, UnsafeTypedArray};
         use stdweb::web::TypedArray;
         use stdweb::unstable::TryInto;
-        let feature = &b.feature();
-        let feature = unsafe { UnsafeTypedArray::new(feature) };
-        let array: Vec<Reference> = js! { evaluate(@{feature}) }.try_into().unwrap();
+        let mut features = [0.0; BVCNT * FEATURE_CNT];
+        b.put_features(&mut features);
+        let features = unsafe { UnsafeTypedArray::new(&features) };
+        let array: Vec<Reference> = js! { evaluate(@{features}) }.try_into().unwrap();
         let mut iter = array
             .into_iter()
             .map(|e| e.downcast::<TypedArray<f32>>().unwrap().to_vec());
@@ -159,7 +162,9 @@ impl Tree {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn evaluate(&mut self, b: &Board) -> (tf::Tensor<f32>, tf::Tensor<f32>) {
-        self.nn.evaluate(&b.feature()).unwrap()
+        let mut features = tf::Tensor::new(&[BVCNT as u64, FEATURE_CNT as u64]);
+        b.put_features(&mut features);
+        self.nn.evaluate(&features).unwrap()
     }
 
     /// 不要なノード(現局面より手数が少ないノード)を削除します。
@@ -461,13 +466,15 @@ impl Tree {
 #[cfg(test)]
 mod tests {
     use test::Bencher;
-    use board::Board;
-    use super::Tree;
 
     #[bench]
     fn bench_search_branch(b: &mut Bencher) {
+        use board::Board;
+        use neural_network::NeuralNetwork;
+        use super::Tree;
+
         let mut board = Board::new();
-        let mut tree = Tree::new("frozen_model.pb");
+        let mut tree = Tree::new(NeuralNetwork::new("frozen_model.pb"));
         let (prob, _) = tree.evaluate(&board);
         b.iter(|| {
             board.clear();

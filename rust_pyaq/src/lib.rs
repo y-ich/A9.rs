@@ -1,11 +1,11 @@
 #![feature(test)]
 #![feature(box_syntax)]
 
-extern crate test;
 extern crate itertools;
 #[macro_use]
 extern crate lazy_static;
 extern crate rand;
+extern crate test;
 
 #[cfg(not(target_arch = "wasm32"))]
 extern crate tensorflow;
@@ -17,6 +17,8 @@ extern crate stdweb;
 pub mod utils;
 pub mod numpy;
 pub mod constants;
+pub mod intersection;
+pub mod coord_convert;
 pub mod stone_group;
 pub mod board;
 pub mod search;

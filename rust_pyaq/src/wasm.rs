@@ -1,11 +1,11 @@
 #![feature(proc_macro)] // stdwebが使う
 
-#[macro_use]
-extern crate stdweb;
+extern crate rust_pyaq_lib;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate rust_pyaq_lib;
+#[macro_use]
+extern crate stdweb;
 
 mod js_client;
 

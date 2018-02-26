@@ -12,3 +12,6 @@ run:
 
 wasm:
 	cargo +nightly build --example rust_pyaq_wasm --target wasm32-unknown-unknown
+
+clean:
+	cargo clean

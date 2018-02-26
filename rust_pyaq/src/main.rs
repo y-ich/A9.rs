@@ -3,8 +3,8 @@
 /// 作者: 市川雄二
 /// ライセンス: MIT
 extern crate getopts;
-extern crate sgf;
 extern crate rust_pyaq_lib;
+extern crate sgf;
 pub mod gtp;
 
 use rust_pyaq_lib as rpl;
@@ -50,8 +50,10 @@ fn random_self_play(max_move_cnt: usize) -> Board {
 }
 
 fn self_play(max_move_cnt: usize, time: f32, clean: bool) -> Board {
+    use neural_network::NeuralNetwork;
+
     let mut b = Board::new();
-    let mut tree = search::Tree::new("frozen_model.pb");
+    let mut tree = search::Tree::new(NeuralNetwork::new("frozen_model.pb"));
     while b.get_move_cnt() < max_move_cnt {
         let prev_move = b.get_prev_move();
         let (mov, _) = tree.search(&b, time, false, clean);
