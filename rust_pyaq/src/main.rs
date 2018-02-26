@@ -62,19 +62,6 @@ fn self_play(max_move_cnt: usize, time: f32, clean: bool) -> Board {
     b
 }
 
-fn final_score(b: &Board) -> f32 {
-    const ROLL_OUT_NUM: usize = 256;
-    let mut double_score_list = Vec::new();
-    let mut b_cpy = Board::new();
-
-    for _ in 0..ROLL_OUT_NUM {
-        b.copy_to(&mut b_cpy);
-        b_cpy.rollout(false);
-        double_score_list.push((b_cpy.score() * 2.0) as i32);
-    }
-    *utils::most_common(&double_score_list) as f32 / 2.0
-}
-
 fn main() {
     let opts = make_opts();
     let args: Vec<String> = std::env::args().collect();
@@ -115,7 +102,7 @@ fn main() {
                 self_play(BVCNT * 2, 0.0, clean)
             };
 
-            let score = final_score(&end_position);
+            let score = end_position.final_score();
             let result_str = if score == 0.0 {
                 "Draw".to_string()
             } else {

@@ -426,10 +426,8 @@ impl Board {
 
     /// 現局面のスコアを返します。
     /// 盤上の石の数と一方の石のみに隣接する空点の数の差がスコアです。
-    /// なので、死に石すべてを上げて十分に陣地を埋めてから使います。
-    /// 死に石すべてを上げて十分に陣地を埋めるにはメソッドrolloutを使います。
     // TODO - Tromp-Taylorルールに変えるべきかどうかの検討
-    pub fn score(&self) -> f32 {
+    fn score(&self) -> f32 {
         let mut stone_cnt = [0, 0];
         for v in (0..BVCNT).map(rv2ev) {
             let s = self.state[v];
@@ -588,5 +586,22 @@ impl Board {
             .collect();
         cand_list.push(ev2rv(PASS));
         (self.hash(), self.move_cnt, cand_list)
+    }
+
+    /// ランダムロールアウトを実行してスコアを返します。
+    /// 現局面が終局図と仮定して統計的にスコアを算出します。
+    pub fn final_score(&self) -> f32 {
+        use utils;
+
+        const ROLL_OUT_NUM: usize = 256;
+        let mut double_score_list = Vec::new();
+        let mut b_cpy = Board::new();
+
+        for _ in 0..ROLL_OUT_NUM {
+            self.copy_to(&mut b_cpy);
+            b_cpy.rollout(false);
+            double_score_list.push((b_cpy.score() * 2.0) as i32);
+        }
+        *utils::most_common(&double_score_list) as f32 / 2.0
     }
 }
