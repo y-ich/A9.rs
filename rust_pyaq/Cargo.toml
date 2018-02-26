@@ -9,23 +9,10 @@ rand = "*"
 itertools = "*"
 lazy_static = "*"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-stdweb = "*"
-serde = "*"
-serde_derive = "*"
-
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 sgf = "*"
 tensorflow = { version = "*", features = ["tensorflow_unstable"] }
 
-[lib]
-name = "rust_pyaq_lib"
-
 [[bin]]
-name = "rust_pyaq"
+name = "rsaq"
 path = "src/main.rs"
-
-[[example]]
-name = "rust_pyaq_wasm"
-path = "src/wasm.rs"
-crate-type = ["cdylib"]

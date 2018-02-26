@@ -1,7 +1,7 @@
 #![feature(test)]
 #![feature(iterator_step_by)]
 extern crate getopts;
-extern crate rust_pyaq_lib;
+extern crate rust_pyaq;
 extern crate sgf;
 extern crate tensorflow;
 extern crate test;
@@ -12,7 +12,7 @@ extern crate test;
 mod neural_network;
 mod gtp;
 
-use rust_pyaq_lib as rpl;
+use rust_pyaq as rpl;
 use rpl::*;
 use rpl::constants::*;
 use rpl::board::*;

@@ -1,6 +1,6 @@
 #![feature(proc_macro)] // stdwebが使う
 
-extern crate rust_pyaq_lib;
+extern crate rust_pyaq;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
@@ -10,7 +10,7 @@ extern crate stdweb;
 mod js_client;
 
 use stdweb::js_export;
-use rust_pyaq_lib::*;
+use rust_pyaq::*;
 
 #[derive(Serialize)]
 pub struct MoveInfo {

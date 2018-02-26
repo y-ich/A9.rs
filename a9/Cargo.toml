@@ -1,0 +1,13 @@
+[package]
+name = "a9"
+version = "0.1.0"
+authors = ["Yuji Ichikawa <ichikawa.yuji@gmail.com>"]
+
+[dependencies]
+stdweb = "*"
+serde = "*"
+serde_derive = "*"
+rust_pyaq = { path = "../rust_pyaq" }
+
+[lib]
+crate-type = ["cdylib"]

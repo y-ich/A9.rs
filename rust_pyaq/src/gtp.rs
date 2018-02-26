@@ -258,7 +258,7 @@ impl GtpClient {
 
     /// 現局面の探索最善手と勝率を返します。手番はself.b.turnです。
     pub fn best_move(&mut self) -> (usize, f32) {
-        use rust_pyaq_lib::search::Evaluate;
+        use rust_pyaq::search::Evaluate;
         if self.quick {
             (
                 rv2ev(np::argmax(self.tree.nn.evaluate(&self.b).0.iter())),

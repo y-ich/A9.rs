@@ -1,6 +1,8 @@
 #![feature(box_syntax)]
 
 extern crate itertools;
+#[cfg(feature = "ponder")]
+#[warn(unused_imports)]
 #[macro_use]
 extern crate lazy_static;
 extern crate rand;

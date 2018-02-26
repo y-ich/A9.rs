@@ -48,6 +48,7 @@ impl Evaluate for NeuralNetwork {
             0,
         );
         let _ = self.session.run(&mut step);
+        // TODO - シグニチャを合わせるためにわざわざVecにコピーしている。可能ならコピーは避けたい。
         (
             step.take_output(policy).unwrap().to_vec(),
             step.take_output(value).unwrap().to_vec(),
