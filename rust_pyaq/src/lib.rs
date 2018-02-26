@@ -1,6 +1,5 @@
-#![feature(box_syntax)]
 #![feature(test)]
-#![feature(proc_macro)] // stdwebが使う
+#![feature(box_syntax)]
 
 extern crate test;
 extern crate itertools;
@@ -14,11 +13,6 @@ extern crate tensorflow;
 #[cfg(target_arch = "wasm32")]
 #[macro_use]
 extern crate stdweb;
-#[cfg(target_arch = "wasm32")]
-extern crate serde;
-#[cfg(target_arch = "wasm32")]
-#[macro_use]
-extern crate serde_derive;
 
 pub mod utils;
 pub mod numpy;
