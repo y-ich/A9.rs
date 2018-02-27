@@ -278,8 +278,9 @@ impl<T: Evaluate> Tree<T> {
                 #[cfg(feature = "ponder")]
                 {
                     search_idx += 1;
-                    if ponder && search_idx % 64 == 0 && TREE_STOP.load(Ordering::Relaxed)
-                        || duration2float(start.elapsed().unwrap()) > time_
+                    if search_idx % 64 == 0
+                        && (ponder && TREE_STOP.load(Ordering::Relaxed)
+                            || duration2float(start.elapsed().unwrap()) > time_)
                     {
                         TREE_STOP.store(false, Ordering::Relaxed);
                         break;
