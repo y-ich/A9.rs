@@ -107,6 +107,9 @@ impl<T: Evaluate> Tree<T> {
 
         let mut node_id = hs as usize % MAX_NODE_CNT;
 
+        // move_cntがusize::MAXのノードが必ず1つはあると仮定している。
+        // delete_nodeを適宜実行しているからこれでいい？
+        // MAX_CODE_CNTで抜けるようにforで書くと遅くなる。
         while self.node[node_id].move_cnt != usize::max_value() {
             node_id = if node_id + 1 < MAX_NODE_CNT {
                 node_id + 1
