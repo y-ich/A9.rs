@@ -72,7 +72,7 @@ mod tests {
         b.iter(|| {
             board.clear();
             tree.clear();
-            tree.root_id = tree.create_node(board.info(), &prob);
+            tree.root_id = tree.create_node(&board, &prob);
             let mut route = Vec::new();
             let root_id = tree.root_id;
             tree.search_branch(&mut board, root_id, &mut route);

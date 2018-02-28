@@ -97,8 +97,9 @@ impl<T: Evaluate> Tree<T> {
         }
     }
 
-    pub fn create_node(&mut self, candidates: &Candidates, prob: &[f32]) -> usize {
+    pub fn create_node(&mut self, b: &Board, prob: &[f32]) -> usize {
         // ベンチマークのためにpubに
+        let candidates = b.candidates();
         let hs = candidates.hash;
 
         if self.node_hashs.contains_key(&hs) && self.node[self.node_hashs[&hs]].hash == hs
@@ -184,7 +185,7 @@ impl<T: Evaluate> Tree<T> {
             self.delete_node();
         }
 
-        let next_id = self.create_node(&b.candidates(), &prob_);
+        let next_id = self.create_node(b, &prob_);
 
         {
             let nd = &mut self.node[node_id];
@@ -262,7 +263,7 @@ impl<T: Evaluate> Tree<T> {
         let mut time_ = time_;
         let start = time::SystemTime::now();
         let (prob, _) = self.nn.evaluate(b);
-        self.root_id = self.create_node(&b.candidates(), &prob);
+        self.root_id = self.create_node(b, &prob);
         self.root_move_cnt = b.get_move_cnt();
         unsafe {
             TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 };
@@ -342,7 +343,7 @@ impl<T: Evaluate> Tree<T> {
         clean: bool,
     ) -> (usize, f32) {
         let (prob, _) = self.nn.evaluate(b);
-        self.root_id = self.create_node(&b.candidates(), &prob);
+        self.root_id = self.create_node(b, &prob);
         self.root_move_cnt = b.get_move_cnt();
         unsafe {
             TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 };
