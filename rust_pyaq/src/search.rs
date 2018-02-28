@@ -277,17 +277,11 @@ impl<T: Evaluate> Tree<T> {
 
         self.delete_node();
 
-        let mut best;
-        let mut second;
+        let (mut best, mut second) = self.node[self.root_id].best2();
         let stand_out;
         let almost_win;
         {
             let nd = &self.node[self.root_id];
-
-            let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
-            best = order_[0];
-            second = order_[1];
-
             let win_rate = self.branch_rate(nd, best);
 
             stand_out = nd.total_cnt > 5000 && nd.visit_cnt[best] > nd.visit_cnt[second] * 100;
@@ -302,12 +296,10 @@ impl<T: Evaluate> Tree<T> {
                     time_ = self.left_time / (55.0 + (50 - b.get_move_cnt()).max(0) as f32);
                 }
             }
-            // search
             self.keep_playout(b, |_| duration2float(start.elapsed().unwrap()) > time_);
-            let nd = &self.node[self.root_id];
-            let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
-            best = order_[0];
-            second = order_[1];
+            let best2 = self.node[self.root_id].best2();
+            best = best2.0;
+            second = best2.1;
         }
 
         let nd = &self.node[self.root_id];
@@ -322,7 +314,7 @@ impl<T: Evaluate> Tree<T> {
             eprintln!(
                 "\nmove count={}: left time={:.1}[sec] evaluated={}",
                 b.get_move_cnt() + 1,
-                (self.left_time - time_).max(0.0),
+                (self.left_time - time_).max(0.0), // stand_outやalmost_winの時にずれるけれども、目をつぶる。先にleft_timeを計算すればいいがそうすると、printの時間が経過時間に含まれない。
                 self.eval_cnt
             );
             self.print_info(self.root_id);
@@ -357,17 +349,11 @@ impl<T: Evaluate> Tree<T> {
 
         self.delete_node();
 
-        let mut best;
-        let mut second;
+        let (mut best, mut second) = self.node[self.root_id].best2();
         let stand_out;
         let almost_win;
         {
             let nd = &self.node[self.root_id];
-
-            let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
-            best = order_[0];
-            second = order_[1];
-
             let win_rate = self.branch_rate(nd, best);
 
             stand_out = nd.total_cnt > 5000 && nd.visit_cnt[best] > nd.visit_cnt[second] * 100;
@@ -376,10 +362,9 @@ impl<T: Evaluate> Tree<T> {
 
         if ponder || !(stand_out || almost_win) {
             self.keep_playout(b, |search_idx| search_idx > max_playout);
-            let nd = &self.node[self.root_id];
-            let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
-            best = order_[0];
-            second = order_[1];
+            let best2 = self.node[self.root_id].best2();
+            best = best2.0;
+            second = best2.1;
         }
 
         let nd = &self.node[self.root_id];
@@ -518,5 +503,10 @@ impl Node {
         self.total_cnt = 0;
         self.hash = 0;
         self.move_cnt = usize::max_value();
+    }
+
+    pub fn best2(&self) -> (usize, usize) {
+        let order_ = np::argsort(&self.visit_cnt[0..self.branch_cnt], true);
+        (order_[0], order_[1])
     }
 }
