@@ -257,6 +257,16 @@ impl<T: Evaluate> Tree<T> {
         }
     }
 
+    /// 探索すべきか判断します。
+    fn should_search(&self, best: usize, second: usize) -> bool {
+        let nd = &self.node[self.root_id];
+        let win_rate = self.branch_rate(nd, best);
+
+        nd.total_cnt <= 5000
+            || (nd.visit_cnt[best] <= nd.visit_cnt[second] * 100 // ベストが突出していない
+                && win_rate >= 0.1 && win_rate <= 0.9) // 形勢はっきりしていない
+    }
+
     /// time_で決定される時間の間、MCTSを実行し、最も勝率の高い着手と勝率を返します。
     #[cfg(not(target_arch = "wasm32"))]
     pub fn search(&mut self, b: &Board, time_: f32, ponder: bool, clean: bool) -> (usize, f32) {
@@ -278,17 +288,8 @@ impl<T: Evaluate> Tree<T> {
         self.delete_node();
 
         let (mut best, mut second) = self.node[self.root_id].best2();
-        let stand_out;
-        let almost_win;
-        {
-            let nd = &self.node[self.root_id];
-            let win_rate = self.branch_rate(nd, best);
 
-            stand_out = nd.total_cnt > 5000 && nd.visit_cnt[best] > nd.visit_cnt[second] * 100;
-            almost_win = nd.total_cnt > 5000 && (win_rate < 0.1 || win_rate > 0.9);
-        }
-
-        if ponder || !(stand_out || almost_win) {
+        if ponder || self.should_search(best, second) {
             if time_ == 0.0 {
                 if self.main_time == 0.0 || self.left_time < self.byoyomi * 2.0 {
                     time_ = self.byoyomi.max(1.0);
@@ -350,17 +351,8 @@ impl<T: Evaluate> Tree<T> {
         self.delete_node();
 
         let (mut best, mut second) = self.node[self.root_id].best2();
-        let stand_out;
-        let almost_win;
-        {
-            let nd = &self.node[self.root_id];
-            let win_rate = self.branch_rate(nd, best);
 
-            stand_out = nd.total_cnt > 5000 && nd.visit_cnt[best] > nd.visit_cnt[second] * 100;
-            almost_win = nd.total_cnt > 5000 && (win_rate < 0.1 || win_rate > 0.9);
-        }
-
-        if ponder || !(stand_out || almost_win) {
+        if ponder || self.should_search(best, second) {
             self.keep_playout(b, |search_idx| search_idx > max_playout);
             let best2 = self.node[self.root_id].best2();
             best = best2.0;
