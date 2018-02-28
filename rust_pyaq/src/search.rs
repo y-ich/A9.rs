@@ -229,6 +229,33 @@ impl<T: Evaluate> Tree<T> {
         value
     }
 
+    fn keep_playout<F: Fn(usize) -> bool>(&mut self, b: &Board, exit_condition: F) {
+        let mut search_idx = 1;
+        self.eval_cnt = 0;
+        let mut b_cpy = Board::new();
+        loop {
+            b.copy_to(&mut b_cpy);
+            let root_id = self.root_id; // 下の行でownershipを解決するための変数
+            self.search_branch(&mut b_cpy, root_id, &mut Vec::new());
+            search_idx += 1;
+            #[cfg(feature = "ponder")]
+            {
+                if search_idx % 64 == 0
+                    && (ponder && TREE_STOP.load(Ordering::Relaxed) || exit_condition(search_idx))
+                {
+                    TREE_STOP.store(false, Ordering::Relaxed);
+                    break;
+                }
+            }
+            #[cfg(not(feature = "ponder"))]
+            {
+                if search_idx % 64 == 0 && exit_condition(search_idx) {
+                    break;
+                }
+            }
+        }
+    }
+
     /// time_で決定される時間の間、MCTSを実行し、最も勝率の高い着手と勝率を返します。
     #[cfg(not(target_arch = "wasm32"))]
     pub fn search(&mut self, b: &Board, time_: f32, ponder: bool, clean: bool) -> (usize, f32) {
@@ -275,32 +302,7 @@ impl<T: Evaluate> Tree<T> {
                 }
             }
             // search
-            let mut search_idx = 1;
-            self.eval_cnt = 0;
-            let mut b_cpy = Board::new();
-            loop {
-                b.copy_to(&mut b_cpy);
-                let mut route = Vec::new();
-                let root_id = self.root_id;
-                self.search_branch(&mut b_cpy, root_id, &mut route);
-                search_idx += 1;
-                #[cfg(feature = "ponder")]
-                {
-                    if search_idx % 64 == 0
-                        && (ponder && TREE_STOP.load(Ordering::Relaxed)
-                            || duration2float(start.elapsed().unwrap()) > time_)
-                    {
-                        TREE_STOP.store(false, Ordering::Relaxed);
-                        break;
-                    }
-                }
-                #[cfg(not(feature = "ponder"))]
-                {
-                    if search_idx % 64 == 0 && duration2float(start.elapsed().unwrap()) > time_ {
-                        break;
-                    }
-                }
-            }
+            self.keep_playout(b, |_| duration2float(start.elapsed().unwrap()) > time_);
             let nd = &self.node[self.root_id];
             let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
             best = order_[0];
@@ -372,32 +374,7 @@ impl<T: Evaluate> Tree<T> {
         }
 
         if ponder || !(stand_out || almost_win) {
-            // search
-            let mut search_idx = 1;
-            self.eval_cnt = 0;
-            let mut b_cpy = Board::new();
-            loop {
-                b.copy_to(&mut b_cpy);
-                let mut route = Vec::new();
-                let root_id = self.root_id;
-                self.search_branch(&mut b_cpy, root_id, &mut route);
-                search_idx += 1;
-                #[cfg(feature = "ponder")]
-                {
-                    if search_idx % 64 == 0
-                        && (ponder && TREE_STOP.load(Ordering::Relaxed) || search_idx > max_playout)
-                    {
-                        TREE_STOP.store(false, Ordering::Relaxed);
-                        break;
-                    }
-                }
-                #[cfg(not(feature = "ponder"))]
-                {
-                    if search_idx > max_playout {
-                        break;
-                    }
-                }
-            }
+            self.keep_playout(b, |search_idx| search_idx > max_playout);
             let nd = &self.node[self.root_id];
             let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
             best = order_[0];
