@@ -267,20 +267,24 @@ impl<T: Evaluate> Tree<T> {
                 && win_rate >= 0.1 && win_rate <= 0.9) // 形勢はっきりしていない
     }
 
+    fn pre_search(&mut self, b: &Board) {
+        let (prob, _) = self.nn.evaluate(b);
+        self.root_id = self.create_node(b, &prob);
+        self.root_move_cnt = b.get_move_cnt();
+        unsafe {
+            TREE_CP = if self.root_move_cnt < 8 { 0.01 } else { 1.5 };
+        }
+    }
+
     /// time_で決定される時間の間、MCTSを実行し、最も勝率の高い着手と勝率を返します。
     #[cfg(not(target_arch = "wasm32"))]
     pub fn search(&mut self, b: &Board, time_: f32, ponder: bool, clean: bool) -> (usize, f32) {
         let mut time_ = time_;
         let start = time::SystemTime::now();
-        let (prob, _) = self.nn.evaluate(b);
-        self.root_id = self.create_node(b, &prob);
-        self.root_move_cnt = b.get_move_cnt();
-        unsafe {
-            TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 };
-        }
+        self.pre_search(b);
 
         if self.node[self.root_id].branch_cnt <= 1 {
-            eprintln!("\nmove count={}:", b.get_move_cnt() + 1);
+            eprintln!("\nmove count={}:", self.root_move_cnt + 1);
             self.print_info(self.root_id);
             return (PASS, 0.5);
         }
@@ -288,13 +292,12 @@ impl<T: Evaluate> Tree<T> {
         self.delete_node();
 
         let (mut best, mut second) = self.node[self.root_id].best2();
-
         if ponder || self.should_search(best, second) {
             if time_ == 0.0 {
                 if self.main_time == 0.0 || self.left_time < self.byoyomi * 2.0 {
                     time_ = self.byoyomi.max(1.0);
                 } else {
-                    time_ = self.left_time / (55.0 + (50 - b.get_move_cnt()).max(0) as f32);
+                    time_ = self.left_time / (55.0 + (50 - self.root_move_cnt).max(0) as f32);
                 }
             }
             self.keep_playout(b, |_| duration2float(start.elapsed().unwrap()) > time_);
@@ -314,7 +317,7 @@ impl<T: Evaluate> Tree<T> {
         if !ponder {
             eprintln!(
                 "\nmove count={}: left time={:.1}[sec] evaluated={}",
-                b.get_move_cnt() + 1,
+                self.root_move_cnt + 1,
                 (self.left_time - time_).max(0.0), // stand_outやalmost_winの時にずれるけれども、目をつぶる。先にleft_timeを計算すればいいがそうすると、printの時間が経過時間に含まれない。
                 self.eval_cnt
             );
@@ -335,15 +338,11 @@ impl<T: Evaluate> Tree<T> {
         ponder: bool,
         clean: bool,
     ) -> (usize, f32) {
-        let (prob, _) = self.nn.evaluate(b);
-        self.root_id = self.create_node(b, &prob);
-        self.root_move_cnt = b.get_move_cnt();
-        unsafe {
-            TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 };
-        }
+        let start = time::SystemTime::now();
+        self.pre_search(b);
 
         if self.node[self.root_id].branch_cnt <= 1 {
-            eprintln!("\nmove count={}:", b.get_move_cnt() + 1);
+            eprintln!("\nmove count={}:", self.root_move_cnt + 1);
             self.print_info(self.root_id);
             return (PASS, 0.5);
         }
@@ -351,7 +350,6 @@ impl<T: Evaluate> Tree<T> {
         self.delete_node();
 
         let (mut best, mut second) = self.node[self.root_id].best2();
-
         if ponder || self.should_search(best, second) {
             self.keep_playout(b, |search_idx| search_idx > max_playout);
             let best2 = self.node[self.root_id].best2();
@@ -370,10 +368,11 @@ impl<T: Evaluate> Tree<T> {
         if !ponder {
             eprintln!(
                 "\nmove count={}: evaluated={}",
-                b.get_move_cnt() + 1,
+                self.root_move_cnt + 1,
                 self.eval_cnt
             );
             self.print_info(self.root_id);
+            self.left_time = (self.left_time - duration2float(start.elapsed().unwrap())).max(0.0);
         }
 
         (next_move, win_rate)
