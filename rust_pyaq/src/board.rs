@@ -41,6 +41,12 @@ pub struct Board {
     history: Vec<usize>,
 }
 
+pub struct Candidates {
+    pub hash: u64,
+    pub move_cnt: usize,
+    pub list: Vec<usize>,
+}
+
 fn initialized_sg() -> Vec<StoneGroup> {
     let mut result = Vec::with_capacity(EBVCNT);
     for _ in 0..EBVCNT {
@@ -458,7 +464,7 @@ impl Board {
     }
 
     /// 局面の情報を返します。
-    pub fn info(&self) -> (u64, usize, Vec<usize>) {
+    pub fn candidates(&self) -> Candidates {
         let mut cand_list: Vec<usize> = self.state
             .iter()
             .enumerate()
@@ -471,7 +477,11 @@ impl Board {
             })
             .collect();
         cand_list.push(ev2rv(PASS));
-        (self.hash(), self.move_cnt, cand_list)
+        Candidates {
+            hash: self.hash(),
+            move_cnt: self.move_cnt,
+            list: cand_list,
+        }
     }
 
     /// ランダムロールアウトを実行してスコアを返します。

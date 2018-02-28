@@ -97,12 +97,12 @@ impl<T: Evaluate> Tree<T> {
         }
     }
 
-    pub fn create_node(&mut self, b_info: (u64, usize, Vec<usize>), prob: &[f32]) -> usize {
+    pub fn create_node(&mut self, candidates: &Candidates, prob: &[f32]) -> usize {
         // ベンチマークのためにpubに
-        let hs = b_info.0;
+        let hs = candidates.hash;
 
         if self.node_hashs.contains_key(&hs) && self.node[self.node_hashs[&hs]].hash == hs
-            && self.node[self.node_hashs[&hs]].move_cnt == b_info.1
+            && self.node[self.node_hashs[&hs]].move_cnt == candidates.move_cnt
         {
             return self.node_hashs[&hs];
         }
@@ -127,12 +127,12 @@ impl<T: Evaluate> Tree<T> {
 
         let nd = &mut self.node[node_id];
         nd.clear();
-        nd.move_cnt = b_info.1;
+        nd.move_cnt = candidates.move_cnt;
         nd.hash = hs;
         nd.init_branch();
 
         for &rv in &np::argsort(prob, true) {
-            if b_info.2.contains(&rv) {
+            if candidates.list.contains(&rv) {
                 nd.mov[nd.branch_cnt] = rv2ev(rv);
                 nd.prob[nd.branch_cnt] = prob[rv];
                 nd.branch_cnt += 1;
@@ -201,7 +201,7 @@ impl<T: Evaluate> Tree<T> {
                     self.delete_node();
                 }
 
-                let next_id = self.create_node(b.info(), &prob_);
+                let next_id = self.create_node(&b.candidates(), &prob_);
 
                 {
                     let nd = &mut self.node[node_id];
@@ -232,7 +232,7 @@ impl<T: Evaluate> Tree<T> {
         let mut time_ = time_;
         let start = time::SystemTime::now();
         let (prob, _) = self.nn.evaluate(b);
-        self.root_id = self.create_node(b.info(), &prob);
+        self.root_id = self.create_node(&b.candidates(), &prob);
         self.root_move_cnt = b.get_move_cnt();
         unsafe {
             TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 };
@@ -337,7 +337,7 @@ impl<T: Evaluate> Tree<T> {
         clean: bool,
     ) -> (usize, f32) {
         let (prob, _) = self.nn.evaluate(b);
-        self.root_id = self.create_node(b.info(), &prob);
+        self.root_id = self.create_node(&b.candidates(), &prob);
         self.root_move_cnt = b.get_move_cnt();
         unsafe {
             TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 };
