@@ -142,44 +142,43 @@ impl<T: Evaluate> Tree<T> {
         node_id
     }
 
+    fn best_by_action_value(&self, b: &Board, node_id: usize) -> (usize, usize, usize, bool) {
+        use itertools::multizip;
+
+        let nd = &self.node[node_id];
+        let nd_rate = if nd.total_cnt == 0 {
+            0.0
+        } else {
+            nd.total_value / nd.total_cnt as f32
+        };
+        let cpsv = unsafe { TREE_CP } * (nd.total_cnt as f32).sqrt();
+        let rate = nd.value_win
+            .iter()
+            .zip(nd.visit_cnt.iter())
+            .map(|(&w, &c)| if c == 0 { nd_rate } else { w / c as f32 });
+        let action_value = multizip((rate, nd.prob.iter(), nd.visit_cnt.iter()))
+            .map(|(r, &p, &c)| r + cpsv * p / (c + 1) as f32)
+            .take(nd.branch_cnt);
+        let best = np::argmax(action_value);
+        let next_id = nd.next_id[best];
+        let next_move = nd.mov[best];
+        let is_head_node = !self.has_next(node_id, best, b.get_move_cnt() + 1)
+            || nd.visit_cnt[best] < EXPAND_CNT
+            || b.get_move_cnt() > BVCNT * 2
+            || (next_move == PASS && b.get_prev_move() == PASS);
+
+        (best, next_id, next_move, is_head_node)
+    }
+
     /// node_idのノードの先を探索し、ValueNetworkの値を返します。
+    // ベンチマークのためにpubに
     pub fn search_branch(
         &mut self,
         b: &mut Board,
         node_id: usize,
         route: &mut Vec<(usize, usize)>,
     ) -> f32 {
-        // ベンチマークのためにpubに
-        let best;
-        let next_id;
-        let next_move;
-        let is_head_node;
-        {
-            // 上記変数を計算し、下記ndを解放するためのブロック
-            use itertools::multizip;
-
-            let nd = &self.node[node_id];
-            let nd_rate = if nd.total_cnt == 0 {
-                0.0
-            } else {
-                nd.total_value / nd.total_cnt as f32
-            };
-            let cpsv = unsafe { TREE_CP } * (nd.total_cnt as f32).sqrt();
-            let rate = nd.value_win
-                .iter()
-                .zip(nd.visit_cnt.iter())
-                .map(|(&w, &c)| if c == 0 { nd_rate } else { w / c as f32 });
-            let action_value = multizip((rate, nd.prob.iter(), nd.visit_cnt.iter()))
-                .map(|(r, &p, &c)| r + cpsv * p / (c + 1) as f32)
-                .take(nd.branch_cnt);
-            best = np::argmax(action_value);
-            next_id = nd.next_id[best];
-            next_move = nd.mov[best];
-            is_head_node = !self.has_next(node_id, best, b.get_move_cnt() + 1)
-                || nd.visit_cnt[best] < EXPAND_CNT
-                || b.get_move_cnt() > BVCNT * 2
-                || (next_move == PASS && b.get_prev_move() == PASS);
-        }
+        let (best, next_id, next_move, is_head_node) = self.best_by_action_value(b, node_id);
         route.push((node_id, best));
 
         let _ = b.play(next_move, false);
