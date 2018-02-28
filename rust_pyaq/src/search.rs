@@ -170,6 +170,33 @@ impl<T: Evaluate> Tree<T> {
         (best, next_id, next_move, is_head_node)
     }
 
+    fn evaluate_child_node(&mut self, b: &Board, node_id: usize, child: usize) -> f32 {
+        let (prob_, value) = self.nn.evaluate(b);
+        self.eval_cnt += 1;
+        let value = -value[0];
+        {
+            let nd = &mut self.node[node_id];
+            nd.value[child] = value;
+            nd.evaluated[child] = true;
+        }
+
+        if self.node_cnt > (0.85 * MAX_NODE_CNT as f32) as usize {
+            self.delete_node();
+        }
+
+        let next_id = self.create_node(&b.candidates(), &prob_);
+
+        {
+            let nd = &mut self.node[node_id];
+            nd.next_id[child] = next_id;
+            nd.next_hash[child] = b.hash();
+
+            nd.total_value -= nd.value_win[child];
+            nd.total_cnt += nd.visit_cnt[child];
+        }
+        value
+    }
+
     /// node_idのノードの先を探索し、ValueNetworkの値を返します。
     // ベンチマークのためにpubに
     pub fn search_branch(
@@ -187,30 +214,7 @@ impl<T: Evaluate> Tree<T> {
             if self.node[node_id].evaluated[best] {
                 self.node[node_id].value[best]
             } else {
-                let (prob_, value_) = self.nn.evaluate(b);
-                self.eval_cnt += 1;
-                let value = -value_[0];
-                {
-                    let mut nd = &mut self.node[node_id];
-                    nd.value[best] = value;
-                    nd.evaluated[best] = true;
-                }
-
-                if self.node_cnt > (0.85 * MAX_NODE_CNT as f32) as usize {
-                    self.delete_node();
-                }
-
-                let next_id = self.create_node(&b.candidates(), &prob_);
-
-                {
-                    let nd = &mut self.node[node_id];
-                    nd.next_id[best] = next_id;
-                    nd.next_hash[best] = b.hash();
-
-                    nd.total_value -= nd.value_win[best];
-                    nd.total_cnt += nd.visit_cnt[best];
-                }
-                value
+                self.evaluate_child_node(b, node_id, best)
             }
         } else {
             -self.search_branch(b, next_id, route)
