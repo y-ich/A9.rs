@@ -33,8 +33,8 @@ impl JsClient {
         Ok(color)
     }
 
-    pub fn best_move(&mut self, byoyomi: f32) -> (usize, f32) {
-        self.tree.search(&self.b, byoyomi, false, false)
+    pub fn best_move(&mut self, playout: usize) -> (usize, f32) {
+        self.tree.search(&self.b, playout, false, false)
     }
 }
 
@@ -43,18 +43,34 @@ pub struct NeuralNetwork {}
 impl Evaluate for NeuralNetwork {
     fn evaluate(&mut self, board: &Board) -> (Vec<f32>, Vec<f32>) {
         use std::mem;
-        use stdweb::{Reference, UnsafeTypedArray};
+        use futures::Future;
+        use futures::sync::oneshot;
+        use stdweb::{Promise, PromiseFuture, Reference, UnsafeTypedArray};
         use stdweb::web::TypedArray;
+        use stdweb::web::error::Error;
         use stdweb::unstable::TryInto;
         use constants::*;
 
         let mut features: [f32; BVCNT * FEATURE_CNT] = unsafe { mem::uninitialized() };
         board.put_features(&mut features);
         let features = unsafe { UnsafeTypedArray::new(&features) };
-        let array: Vec<Reference> = js! { evaluate(@{features}) }.try_into().unwrap();
-        let mut iter = array
-            .into_iter()
-            .map(|e| e.downcast::<TypedArray<f32>>().unwrap().to_vec());
-        (iter.next().unwrap(), iter.next().unwrap())
+        let jsPromise = js! { return evaluate(@{ features }) }.try_into().unwrap();
+        let promise = Promise::from_thenable(&jsPromise).unwrap();
+        let future: PromiseFuture<Vec<Reference>, Error> = promise.to_future();
+        PromiseFuture::spawn(
+            future
+                .map(|array| {
+                    let mut iter = array
+                        .into_iter()
+                        .map(|e| e.downcast::<TypedArray<f32>>().unwrap().to_vec());
+                    unimplemented!();
+                    // TODO - spawnされたスレッドから以下のデータをevaluateの呼び出し元に返す方法がわからない
+                    (iter.next().unwrap(), iter.next().unwrap())
+                })
+                .map_err(|e| {
+                    console!(error, e);
+                }),
+        );
+        unimplemented!();
     }
 }

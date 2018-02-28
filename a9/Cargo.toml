@@ -4,10 +4,14 @@ version = "0.1.0"
 authors = ["Yuji Ichikawa <ichikawa.yuji@gmail.com>"]
 
 [dependencies]
-stdweb = "*"
+futures = "*"
 serde = "*"
 serde_derive = "*"
 rust_pyaq = { path = "../rust_pyaq" }
+
+[dependencies.stdweb]
+version = "*"
+features = ["experimental_features_which_may_break_on_minor_version_bumps"]
 
 [lib]
 crate-type = ["cdylib"]

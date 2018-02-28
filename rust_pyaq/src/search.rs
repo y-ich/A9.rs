@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+#[cfg(not(target_arch = "wasm32"))]
 use std::time;
 #[cfg(feature = "ponder")]
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -10,6 +11,7 @@ use board::*;
 const MAX_NODE_CNT: usize = 16384; // 2 ^ 14
 const EXPAND_CNT: usize = 8;
 
+#[cfg(not(target_arch = "wasm32"))]
 fn duration2float(d: time::Duration) -> f32 {
     d.as_secs() as f32 + d.subsec_nanos() as f32 / 1000_000_000.0
 }
@@ -225,6 +227,7 @@ impl<T: Evaluate> Tree<T> {
     }
 
     /// time_で決定される時間の間、MCTSを実行し、最も勝率の高い着手と勝率を返します。
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn search(&mut self, b: &Board, time_: f32, ponder: bool, clean: bool) -> (usize, f32) {
         let mut time_ = time_;
         let start = time::SystemTime::now();
@@ -269,7 +272,6 @@ impl<T: Evaluate> Tree<T> {
                 }
             }
             // search
-            #[cfg(feature = "ponder")]
             let mut search_idx = 1;
             self.eval_cnt = 0;
             let mut b_cpy = Board::new();
@@ -278,9 +280,9 @@ impl<T: Evaluate> Tree<T> {
                 let mut route = Vec::new();
                 let root_id = self.root_id;
                 self.search_branch(&mut b_cpy, root_id, &mut route);
+                search_idx += 1;
                 #[cfg(feature = "ponder")]
                 {
-                    search_idx += 1;
                     if search_idx % 64 == 0
                         && (ponder && TREE_STOP.load(Ordering::Relaxed)
                             || duration2float(start.elapsed().unwrap()) > time_)
@@ -291,7 +293,7 @@ impl<T: Evaluate> Tree<T> {
                 }
                 #[cfg(not(feature = "ponder"))]
                 {
-                    if duration2float(start.elapsed().unwrap()) > time_ {
+                    if search_idx % 64 == 0 && duration2float(start.elapsed().unwrap()) > time_ {
                         break;
                     }
                 }
@@ -319,6 +321,101 @@ impl<T: Evaluate> Tree<T> {
             );
             self.print_info(self.root_id);
             self.left_time = (self.left_time - duration2float(start.elapsed().unwrap())).max(0.0);
+        }
+
+        (next_move, win_rate)
+    }
+
+    /// MCTSをmax_playoutのプレイアウト数実行し、最も勝率の高い着手と勝率を返します。
+    /// TODO - wasmのlibstdのSystemTimeのマッピングがまだ終わっていないので作成した。マッピングされたら上記メソッドに戻す
+    #[cfg(target_arch = "wasm32")]
+    pub fn search(
+        &mut self,
+        b: &Board,
+        max_playout: usize,
+        ponder: bool,
+        clean: bool,
+    ) -> (usize, f32) {
+        let (prob, _) = self.nn.evaluate(b);
+        self.root_id = self.create_node(b.info(), &prob);
+        self.root_move_cnt = b.get_move_cnt();
+        unsafe {
+            TREE_CP = if b.get_move_cnt() < 8 { 0.01 } else { 1.5 };
+        }
+
+        if self.node[self.root_id].branch_cnt <= 1 {
+            eprintln!("\nmove count={}:", b.get_move_cnt() + 1);
+            self.print_info(self.root_id);
+            return (PASS, 0.5);
+        }
+
+        self.delete_node();
+
+        let mut best;
+        let mut second;
+        let stand_out;
+        let almost_win;
+        {
+            let nd = &self.node[self.root_id];
+
+            let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
+            best = order_[0];
+            second = order_[1];
+
+            let win_rate = self.branch_rate(nd, best);
+
+            stand_out = nd.total_cnt > 5000 && nd.visit_cnt[best] > nd.visit_cnt[second] * 100;
+            almost_win = nd.total_cnt > 5000 && (win_rate < 0.1 || win_rate > 0.9);
+        }
+
+        if ponder || !(stand_out || almost_win) {
+            // search
+            let mut search_idx = 1;
+            self.eval_cnt = 0;
+            let mut b_cpy = Board::new();
+            loop {
+                b.copy_to(&mut b_cpy);
+                let mut route = Vec::new();
+                let root_id = self.root_id;
+                self.search_branch(&mut b_cpy, root_id, &mut route);
+                search_idx += 1;
+                #[cfg(feature = "ponder")]
+                {
+                    if search_idx % 64 == 0
+                        && (ponder && TREE_STOP.load(Ordering::Relaxed) || search_idx > max_playout)
+                    {
+                        TREE_STOP.store(false, Ordering::Relaxed);
+                        break;
+                    }
+                }
+                #[cfg(not(feature = "ponder"))]
+                {
+                    if search_idx > max_playout {
+                        break;
+                    }
+                }
+            }
+            let nd = &self.node[self.root_id];
+            let order_ = np::argsort(&nd.visit_cnt[0..nd.branch_cnt], true);
+            best = order_[0];
+            second = order_[1];
+        }
+
+        let nd = &self.node[self.root_id];
+        let mut next_move = nd.mov[best];
+        let mut win_rate = self.branch_rate(&nd, best);
+
+        if clean && next_move == PASS && nd.value_win[best] * nd.value_win[second] > 0.0 {
+            next_move = nd.mov[second];
+            win_rate = self.branch_rate(&nd, second);
+        }
+        if !ponder {
+            eprintln!(
+                "\nmove count={}: evaluated={}",
+                b.get_move_cnt() + 1,
+                self.eval_cnt
+            );
+            self.print_info(self.root_id);
         }
 
         (next_move, win_rate)

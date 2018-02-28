@@ -1,5 +1,6 @@
 #![feature(proc_macro)] // stdwebが使う
 
+extern crate futures;
 extern crate rust_pyaq;
 extern crate serde;
 #[macro_use]
@@ -21,12 +22,12 @@ pub struct MoveInfo {
 js_serializable!(MoveInfo);
 
 #[js_export]
-pub fn think(pv: Vec<usize>, byoyomi: f64) -> MoveInfo {
+pub fn think(pv: Vec<usize>, playout: usize) -> MoveInfo {
     use std::f64;
 
     let mut client = js_client::JsClient::new();
     if client.load_pv(&pv).is_ok() {
-        let result = client.best_move(byoyomi as f32);
+        let result = client.best_move(playout);
         MoveInfo {
             mov: result.0,
             win_rate: result.1 as f64,
