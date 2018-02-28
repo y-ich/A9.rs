@@ -276,31 +276,24 @@ impl<T: Evaluate> Tree<T> {
         }
     }
 
-    /// time_で決定される時間の間、MCTSを実行し、最も勝率の高い着手と勝率を返します。
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn search(&mut self, b: &Board, time_: f32, ponder: bool, clean: bool) -> (usize, f32) {
-        let mut time_ = time_;
-        let start = time::SystemTime::now();
-        self.pre_search(b);
-
-        if self.node[self.root_id].branch_cnt <= 1 {
-            eprintln!("\nmove count={}:", self.root_move_cnt + 1);
-            self.print_info(self.root_id);
-            return (PASS, 0.5);
+    fn get_search_time(&self) -> f32 {
+        if self.main_time == 0.0 || self.left_time < self.byoyomi * 2.0 {
+            self.byoyomi.max(1.0)
+        } else {
+            self.left_time / (55.0 + (50 - self.root_move_cnt).max(0) as f32)
         }
+    }
 
-        self.delete_node();
-
+    fn _search<F: Fn(usize) -> bool>(
+        &mut self,
+        b: &Board,
+        ponder: bool,
+        clean: bool,
+        exit_condition: F,
+    ) -> (usize, f32) {
         let (mut best, mut second) = self.node[self.root_id].best2();
         if ponder || self.should_search(best, second) {
-            if time_ == 0.0 {
-                if self.main_time == 0.0 || self.left_time < self.byoyomi * 2.0 {
-                    time_ = self.byoyomi.max(1.0);
-                } else {
-                    time_ = self.left_time / (55.0 + (50 - self.root_move_cnt).max(0) as f32);
-                }
-            }
-            self.keep_playout(b, |_| duration2float(start.elapsed().unwrap()) > time_);
+            self.keep_playout(b, exit_condition);
             let best2 = self.node[self.root_id].best2();
             best = best2.0;
             second = best2.1;
@@ -314,11 +307,37 @@ impl<T: Evaluate> Tree<T> {
             next_move = nd.mov[second];
             win_rate = self.branch_rate(&nd, second);
         }
+        (next_move, win_rate)
+    }
+
+    /// time_で決定される時間の間、MCTSを実行し、最も勝率の高い着手と勝率を返します。
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn search(&mut self, b: &Board, time: f32, ponder: bool, clean: bool) -> (usize, f32) {
+        let start = time::SystemTime::now();
+        self.pre_search(b);
+
+        if self.node[self.root_id].branch_cnt <= 1 {
+            eprintln!("\nmove count={}:", self.root_move_cnt + 1);
+            self.print_info(self.root_id);
+            return (PASS, 0.5);
+        }
+
+        self.delete_node();
+
+        let time_ = if time == 0.0 {
+            self.get_search_time()
+        } else {
+            time
+        };
+        let (next_move, win_rate) = self._search(b, ponder, clean, |_| {
+            duration2float(start.elapsed().unwrap()) > time_
+        });
+
         if !ponder {
             eprintln!(
                 "\nmove count={}: left time={:.1}[sec] evaluated={}",
                 self.root_move_cnt + 1,
-                (self.left_time - time_).max(0.0), // stand_outやalmost_winの時にずれるけれども、目をつぶる。先にleft_timeを計算すればいいがそうすると、printの時間が経過時間に含まれない。
+                (self.left_time - time).max(0.0), // stand_outやalmost_winの時にずれるけれども、目をつぶる。先にleft_timeを計算すればいいがそうすると、printの時間が経過時間に含まれない。
                 self.eval_cnt
             );
             self.print_info(self.root_id);
@@ -349,22 +368,9 @@ impl<T: Evaluate> Tree<T> {
 
         self.delete_node();
 
-        let (mut best, mut second) = self.node[self.root_id].best2();
-        if ponder || self.should_search(best, second) {
-            self.keep_playout(b, |search_idx| search_idx > max_playout);
-            let best2 = self.node[self.root_id].best2();
-            best = best2.0;
-            second = best2.1;
-        }
+        let (next_move, win_rate) =
+            self._search(b, ponder, clean, |search_idx| search_idx > max_playout);
 
-        let nd = &self.node[self.root_id];
-        let mut next_move = nd.mov[best];
-        let mut win_rate = self.branch_rate(&nd, best);
-
-        if clean && next_move == PASS && nd.value_win[best] * nd.value_win[second] > 0.0 {
-            next_move = nd.mov[second];
-            win_rate = self.branch_rate(&nd, second);
-        }
         if !ponder {
             eprintln!(
                 "\nmove count={}: evaluated={}",
