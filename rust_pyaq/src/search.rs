@@ -1,12 +1,12 @@
-use std::collections::HashMap;
-#[cfg(not(target_arch = "wasm32"))]
-use std::time;
-#[cfg(feature = "ponder")]
-use std::sync::atomic::{AtomicBool, Ordering};
-use numpy as np;
+use board::*;
 use constants::*;
 use coord_convert::*;
-use board::*;
+use numpy as np;
+use std::collections::HashMap;
+#[cfg(feature = "ponder")]
+use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time;
 
 const MAX_NODE_CNT: usize = 16384; // 2 ^ 14
 const EXPAND_CNT: usize = 8;
@@ -143,24 +143,35 @@ impl<T: Evaluate> Tree<T> {
         node_id
     }
 
-    fn best_by_action_value(&self, b: &Board, node_id: usize) -> (usize, usize, usize, bool) {
+    fn best_by_upper_confidence_bound(
+        &self,
+        b: &Board,
+        node_id: usize,
+    ) -> (usize, usize, usize, bool) {
         use itertools::multizip;
 
         let nd = &self.node[node_id];
-        let nd_rate = if nd.total_cnt == 0 {
+        let nd_action_value = if nd.total_cnt == 0 {
             0.0
         } else {
             nd.total_value / nd.total_cnt as f32
         };
         let cpsv = unsafe { TREE_CP } * (nd.total_cnt as f32).sqrt();
-        let rate = nd.value_win
+        let action_values = nd.value_win
             .iter()
             .zip(nd.visit_cnt.iter())
-            .map(|(&w, &c)| if c == 0 { nd_rate } else { w / c as f32 });
-        let action_value = multizip((rate, nd.prob.iter(), nd.visit_cnt.iter()))
-            .map(|(r, &p, &c)| r + cpsv * p / (c + 1) as f32)
-            .take(nd.branch_cnt);
-        let best = np::argmax(action_value);
+            .map(|(&w, &c)| {
+                if c == 0 {
+                    nd_action_value
+                } else {
+                    w / c as f32
+                }
+            });
+        let upper_confidence_bounds =
+            multizip((action_values, nd.prob.iter(), nd.visit_cnt.iter()))
+                .map(|(r, &p, &c)| r + cpsv * p / (c + 1) as f32)
+                .take(nd.branch_cnt);
+        let best = np::argmax(upper_confidence_bounds);
         let next_id = nd.next_id[best];
         let next_move = nd.mov[best];
         let is_head_node = !self.has_next(node_id, best, b.get_move_cnt() + 1)
@@ -206,7 +217,8 @@ impl<T: Evaluate> Tree<T> {
         node_id: usize,
         route: &mut Vec<(usize, usize)>,
     ) -> f32 {
-        let (best, next_id, next_move, is_head_node) = self.best_by_action_value(b, node_id);
+        let (best, next_id, next_move, is_head_node) =
+            self.best_by_upper_confidence_bound(b, node_id);
         route.push((node_id, best));
 
         let _ = b.play(next_move, false);
